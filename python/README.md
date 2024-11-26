@@ -1,5 +1,1 @@
-Repository for Arize tutorials, python, GraphQL, and more.
-
-```
-
-```
+Here we save python tutorials.
