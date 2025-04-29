@@ -5,7 +5,10 @@ This is a tutorial for tracing LLM calls using BeeAI. You'll need to have Ollama
 
 ## Setup
 
+This project requires Node.js v18 or later. We recommend using Node Version Manager (nvm) to manage your Node.js versions.
+
 ```bash
+nvm use 20
 yarn install
 ```
 
