@@ -1,0 +1,33 @@
+# Generated dirs
+.vscode
+!.vscode/extensions.json
+.idea
+.coverage
+node_modules
+dist
+sdist
+*__pycache__*
+**/.pytest_cache
+**/.ipynb_checkpoints/
+**/.DS_Store
+
+
+
+# Data files
+*.csv
+!tests/**/fixtures/*.csv
+*.hdf
+*.hdf5
+
+.cursorrules
+.env
+
+# python environments
+.conda
+.venv
+
+# Caches
+.pnpm-store
+
+# mypy
+.mypy_cache
