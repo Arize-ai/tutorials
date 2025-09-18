@@ -4,16 +4,18 @@ Goal: bring the AI Trip Planner agent online on your local machine.
 
 ## 1. Clone and prepare the repository
 - `git clone https://github.com/Arize-ai/arize.git`
-- `cd tutorials/python/llm/agent-mastery-course` (the lab workspace)
+- `cd tutorials/python/llm/agents/agent-mastery-course` (the lab workspace)
 
 
 ## 2. Configure environment variables
 - Copy `backend/env_example.txt` to `backend/.env`
-- Add one LLM key: `OPENAI_API_KEY=` or `OPENROUTER_API_KEY=`
-- (Optional) add `ARIZE_SPACE_ID` and `ARIZE_API_KEY` if you plan to instrument tracing later
+- Add one LLM key: `OPENAI_API_KEY=`
+- add `ARIZE_SPACE_ID` and `ARIZE_API_KEY` if you plan to instrument tracing later
 
 ## 3. Install dependencies
 - `cd backend`
+- `python3 -m venv .venv`
+- `source .venv/bin/activate`
 - `uv pip install -r requirements.txt` (or `pip install -r requirements.txt`)
 - Return to the repo root when finished
 
