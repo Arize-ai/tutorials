@@ -12,10 +12,23 @@ try:
     from arize.otel import register
     from openinference.instrumentation.langchain import LangChainInstrumentor
     from openinference.instrumentation.litellm import LiteLLMInstrumentor
-    from openinference.instrumentation import using_prompt_template
+    from openinference.instrumentation import using_prompt_template, using_metadata, using_attributes
+    from opentelemetry import trace
     _TRACING = True
 except Exception:
     def using_prompt_template(**kwargs):  # type: ignore
+        from contextlib import contextmanager
+        @contextmanager
+        def _noop():
+            yield
+        return _noop()
+    def using_metadata(*args, **kwargs):  # type: ignore
+        from contextlib import contextmanager
+        @contextmanager
+        def _noop():
+            yield
+        return _noop()
+    def using_attributes(*args, **kwargs):  # type: ignore
         from contextlib import contextmanager
         @contextmanager
         def _noop():
@@ -52,6 +65,7 @@ class TripRequest(BaseModel):
     budget: Optional[str] = None
     interests: Optional[str] = None
     travel_style: Optional[str] = None
+    user_input: Optional[str] = None
 
 
 class TripResponse(BaseModel):
@@ -606,19 +620,23 @@ class TripState(TypedDict):
 def research_agent(state: TripState) -> TripState:
     req = state["trip_request"]
     destination = req["destination"]
+    user_input = (req.get("user_input") or "").strip()
     if ENABLE_MCP:
-        prompt_t = (
-            "You are a research assistant.\n"
-            "First, call the mcp_weather tool to get weather for {destination}.\n"
-            "Then use other tools as needed for additional information."
-        )
+        prompt_lines = [
+            "You are a research assistant.",
+            "First, call the mcp_weather tool to get weather for {destination}.",
+            "Then use other tools as needed for additional information.",
+        ]
     else:
-        prompt_t = (
-            "You are a research assistant.\n"
-            "Gather essential information about {destination}.\n"
-            "Use at most one tool if needed."
-        )
-    vars_ = {"destination": destination}
+        prompt_lines = [
+            "You are a research assistant.",
+            "Gather essential information about {destination}.",
+            "Use at most one tool if needed.",
+        ]
+    if user_input:
+        prompt_lines.append("User input: {user_input}")
+    prompt_t = "\n".join(prompt_lines)
+    vars_ = {"destination": destination, "user_input": user_input}
     tools = [essential_info, weather_brief, visa_brief]
     if ENABLE_MCP:
         tools.append(mcp_weather)
@@ -644,17 +662,26 @@ def budget_agent(state: TripState) -> TripState:
     req = state["trip_request"]
     destination, duration = req["destination"], req["duration"]
     budget = req.get("budget", "moderate")
-    prompt_t = (
-        "You are a budget analyst.\n"
-        "Analyze costs for {destination} over {duration} with budget: {budget}.\n"
-        "Use tools to get pricing information, then provide a detailed breakdown."
-    )
-    vars_ = {"destination": destination, "duration": duration, "budget": budget}
-    
+    user_input = (req.get("user_input") or "").strip()
+    prompt_lines = [
+        "You are a budget analyst.",
+        "Analyze costs for {destination} over {duration} with budget: {budget}.",
+        "Use tools to get pricing information, then provide a detailed breakdown.",
+    ]
+    if user_input:
+        prompt_lines.append("User input: {user_input}")
+    prompt_t = "\n".join(prompt_lines)
+    vars_ = {
+        "destination": destination,
+        "duration": duration,
+        "budget": budget,
+        "user_input": user_input,
+    }
+
     messages = [SystemMessage(content=prompt_t.format(**vars_))]
     tools = [budget_basics, attraction_prices]
     agent = llm.bind_tools(tools)
-    
+
     calls: List[Dict[str, Any]] = []
     
     with using_prompt_template(template=prompt_t, variables=vars_, version="v1"):
@@ -670,7 +697,12 @@ def budget_agent(state: TripState) -> TripState:
         # Add tool results and ask for synthesis
         messages.append(res)
         messages.extend(tr["messages"])
-        messages.append(SystemMessage(content=f"Create a detailed budget breakdown for {duration} in {destination} with a {budget} budget."))
+        follow_up = (
+            f"Create a detailed budget breakdown for {duration} in {destination} with a {budget} budget."
+        )
+        if user_input:
+            follow_up += f" Address this user input as well: {user_input}."
+        messages.append(SystemMessage(content=follow_up))
         
         final_res = llm.invoke(messages)
         out = final_res.content
@@ -683,9 +715,12 @@ def budget_agent(state: TripState) -> TripState:
 def local_agent(state: TripState) -> TripState:
     req = state["trip_request"]
     destination = req["destination"]
-    interests = req.get("interests", "local culture")
+    user_input = (req.get("user_input") or "").strip()
+    interests_raw = (req.get("interests") or "").strip()
+    interests = interests_raw or "local culture"
     # Pull semantic matches from curated dataset when the flag allows it.
-    retrieved = LOCAL_GUIDE_RETRIEVER.retrieve(destination, interests)
+    retrieval_focus = interests_raw or (user_input if user_input else None)
+    retrieved = LOCAL_GUIDE_RETRIEVER.retrieve(destination, retrieval_focus)
     context_lines = []
     citation_lines = []
     for idx, item in enumerate(retrieved, start=1):
@@ -703,11 +738,21 @@ def local_agent(state: TripState) -> TripState:
 
     prompt_t = (
         "You are a local guide.\n"
-        "Use the retrieved travel notes to suggest authentic experiences in {destination} for interests: {interests}.\n"
+        "Use the retrieved travel notes to suggest authentic experiences in {destination}.\n"
+    )
+    if user_input:
+        prompt_t += "User input: {user_input}\n"
+    prompt_t += (
+        "Focus interests: {interests}.\n"
         "Context:\n{context}\n"
         "Cite the numbered items when you rely on them."
     )
-    vars_ = {"destination": destination, "interests": interests, "context": context_text}
+    vars_ = {
+        "destination": destination,
+        "interests": interests,
+        "context": context_text,
+        "user_input": user_input,
+    }
     with using_prompt_template(template=prompt_t, variables=vars_, version="v1"):
         agent = llm.bind_tools([local_flavor, local_customs, hidden_gems])
         res = agent.invoke([SystemMessage(content=prompt_t.format(**vars_))])
@@ -758,10 +803,18 @@ def itinerary_agent(state: TripState) -> TripState:
     destination = req["destination"]
     duration = req["duration"]
     travel_style = req.get("travel_style", "standard")
-    prompt_t = (
-        "Create a {duration} itinerary for {destination} ({travel_style}).\n\n"
-        "Inputs:\nResearch: {research}\nBudget: {budget}\nLocal: {local}\n"
-    )
+    user_input = (req.get("user_input") or "").strip()
+    prompt_parts = [
+        "Create a {duration} itinerary for {destination} ({travel_style}).",
+        "",
+        "Inputs:",
+        "Research: {research}",
+        "Budget: {budget}",
+        "Local: {local}",
+    ]
+    if user_input:
+        prompt_parts.append("User input: {user_input}")
+    prompt_t = "\n".join(prompt_parts)
     vars_ = {
         "duration": duration,
         "destination": destination,
@@ -769,9 +822,19 @@ def itinerary_agent(state: TripState) -> TripState:
         "research": (state.get("research") or "")[:400],
         "budget": (state.get("budget") or "")[:400],
         "local": (state.get("local") or "")[:400],
+        "user_input": user_input,
     }
     with using_prompt_template(template=prompt_t, variables=vars_, version="v1"):
-        res = llm.invoke([SystemMessage(content=prompt_t.format(**vars_))])
+        with using_attributes(tags=["itinerary", "final_agent"]):
+            if _TRACING:
+                current_span = trace.get_current_span()
+                if current_span:
+                    current_span.set_attribute("metadata.itinerary", "true")
+                    current_span.set_attribute("metadata.agent_type", "itinerary")
+                    current_span.set_attribute("metadata.agent_node", "itinerary_node")
+                    if user_input:
+                        current_span.set_attribute("metadata.user_input", user_input)
+            res = llm.invoke([SystemMessage(content=prompt_t.format(**vars_))])
     return {"messages": [SystemMessage(content=res.content)], "final": res.content}
 
 

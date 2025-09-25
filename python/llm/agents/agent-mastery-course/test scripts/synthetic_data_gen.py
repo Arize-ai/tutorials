@@ -21,13 +21,9 @@ from typing import Any, Dict, List
 import requests
 
 
-def scenarios_bad_tool_calls() -> List[Dict[str, Any]]:
-    """Curated prompts designed to elicit wrong tool usage.
-
-    Each scenario declares wrong_tools (tools that should NOT be used)
-    and recommended_tools (tools that SHOULD be used) to guide evaluation.
-    """
-    base = [
+def scenarios_bad_tool_calls() -> Dict[str, List[Dict[str, Any]]]:
+    """Curated prompts grouped by goal so we can balance the mix of traffic."""
+    wrong_tool = [
         {
             "name": "Weather Asked In Budget Field",
             "request": {
@@ -58,7 +54,7 @@ def scenarios_bad_tool_calls() -> List[Dict[str, Any]]:
                 "destination": "Marrakech, Morocco",
                 "duration": "1 week",
                 "budget": "$1500",
-                "interests": "what etiquette and local customs should I know?",
+                "user_input": "Explain what etiquette and local customs I need to know.",
                 "travel_style": "authentic",
             },
             "recommended_tools": ["get_local_customs"],
@@ -70,7 +66,7 @@ def scenarios_bad_tool_calls() -> List[Dict[str, Any]]:
                 "destination": "Bangkok, Thailand",
                 "duration": "7 days",
                 "budget": "$1200",
-                "interests": "I need visa info and embassy rules",
+                "user_input": "I need visa info and embassy rules.",
                 "travel_style": "budget",
             },
             "recommended_tools": ["research_visa_requirements", "search_destination_info"],
@@ -82,7 +78,7 @@ def scenarios_bad_tool_calls() -> List[Dict[str, Any]]:
                 "destination": "Tokyo, Japan",
                 "duration": "6 days",
                 "budget": "$900",
-                "interests": "exact accommodation prices, precise weather data, specific restaurant prices",
+                "user_input": "Give exact accommodation prices, precise weather data, and specific restaurant prices.",
                 "travel_style": "data-driven",
             },
             "recommended_tools": [
@@ -98,11 +94,44 @@ def scenarios_bad_tool_calls() -> List[Dict[str, Any]]:
                 "destination": "Rome, Italy",
                 "duration": "5 days",
                 "budget": "$1000",
-                "interests": "hidden gems only",
+                "user_input": "I only want hidden gems.",
                 "travel_style": "adventure",
             },
             "recommended_tools": ["find_hidden_gems"],
             "wrong_tools": ["calculate_food_cost"],
+        },
+    ]
+
+    normal = [
+        {
+            "name": "Standard: Paris Highlights",
+            "request": {
+                "destination": "Paris, France",
+                "duration": "5 days",
+                "budget": "$2000",
+                "interests": "art, food, history",
+                "travel_style": "standard",
+            },
+        },
+        {
+            "name": "Standard: Seoul Street Food",
+            "request": {
+                "destination": "Seoul, South Korea",
+                "duration": "6 days",
+                "budget": "$1500",
+                "interests": "street food, technology, nightlife",
+                "travel_style": "adventure",
+            },
+        },
+        {
+            "name": "Standard: Patagonia Trek",
+            "request": {
+                "destination": "Patagonia, Argentina",
+                "duration": "8 days",
+                "budget": "$2500",
+                "interests": "hiking, glaciers, photography",
+                "travel_style": "outdoors",
+            },
         },
     ]
 
@@ -114,7 +143,7 @@ def scenarios_bad_tool_calls() -> List[Dict[str, Any]]:
                 "destination": "Lisbon, Portugal",
                 "duration": "5 days",
                 "budget": "$1200",
-                "interests": "I'm really frustrated. Stop giving generic advice and give me specifics only.",
+                "user_input": "I'm really frustrated. Stop giving generic advice and give me specifics only.",
                 "travel_style": "standard",
             },
             "frustrated": True,
@@ -125,7 +154,7 @@ def scenarios_bad_tool_calls() -> List[Dict[str, Any]]:
                 "destination": "Prague, Czech Republic",
                 "duration": "3 days",
                 "budget": "$800",
-                "interests": "This is the third time I'm asking. Please acknowledge that and be concise.",
+                "user_input": "This is the third time I'm asking. Please acknowledge that and be concise.",
                 "travel_style": "budget",
             },
             "frustrated": True,
@@ -136,14 +165,18 @@ def scenarios_bad_tool_calls() -> List[Dict[str, Any]]:
                 "destination": "New York City, USA",
                 "duration": "2 days",
                 "budget": "$500",
-                "interests": "I'm annoyed. Do not upsell. Only free or cheap options.",
+                "user_input": "I'm annoyed. Do not upsell. Only free or cheap options.",
                 "travel_style": "budget",
             },
             "frustrated": True,
         },
     ]
 
-    return base + frustrated
+    return {
+        "wrong_tool": wrong_tool,
+        "normal": normal,
+        "frustrated": frustrated,
+    }
 
 
 def post_plan_trip(base_url: str, payload: Dict[str, Any], timeout: int = 60) -> Dict[str, Any]:
@@ -222,19 +255,57 @@ def evaluate_tone_off(response_text: str, frustrated: bool) -> Dict[str, Any]:
 def main():
     parser = argparse.ArgumentParser(description="Generate synthetic requests that provoke bad tool calls.")
     parser.add_argument("--base-url", default=os.getenv("API_BASE_URL", "http://localhost:8000"))
-    parser.add_argument("--count", type=int, default=12, help="Total requests to send (scenarios are sampled)")
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=500,
+        help="Number of requests to send (defaults to 500)",
+    )
+    parser.add_argument(
+        "--multiplier",
+        type=int,
+        default=1,
+        help="Multiplier applied to --count to determine total requests",
+    )
     parser.add_argument("--outfile", default="synthetic_bad_tool_calls.json")
     args = parser.parse_args()
 
-    scenarios = scenarios_bad_tool_calls()
+    catalog = scenarios_bad_tool_calls()
+    categories = ["frustrated", "wrong_tool", "normal"]
     results: List[Dict[str, Any]] = []
+    total_requests = max(args.count, 0) * max(args.multiplier, 0)
+
+    if total_requests <= 0:
+        print("No requests scheduled. Provide a positive --count and --multiplier.")
+        return
+
+    available_categories = [cat for cat in categories if catalog.get(cat)]
+    if not available_categories:
+        print("No scenarios available. Check the scenario catalog definition.")
+        return
+
+    base_slice = total_requests // len(available_categories)
+    remainder = total_requests % len(available_categories)
+    category_counts = {cat: base_slice for cat in available_categories}
+    for idx in range(remainder):
+        category_counts[available_categories[idx]] += 1
+
+    sequence: List[str] = []
+    for cat, count in category_counts.items():
+        sequence.extend([cat] * count)
+    random.shuffle(sequence)
 
     print("🌋 Generating synthetic bad-tool-call requests")
     print("=" * 70)
     print(f"Target: {args.base_url}")
+    print(
+        "Mix: "
+        + ", ".join(f"{cat}={category_counts[cat]}" for cat in available_categories)
+        + f" | Total requests: {total_requests}"
+    )
 
-    for i in range(args.count):
-        scenario = random.choice(scenarios)
+    for i, cat in enumerate(sequence):
+        scenario = random.choice(catalog[cat])
         payload = scenario["request"].copy()
         print(f"\n#{i+1:02d} {scenario['name']} → {payload['destination']} ({payload['duration']})")
 
