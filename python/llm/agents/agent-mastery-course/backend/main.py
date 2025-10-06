@@ -831,7 +831,7 @@ def itinerary_agent(state: TripState) -> TripState:
                 if current_span:
                     current_span.set_attribute("metadata.itinerary", "true")
                     current_span.set_attribute("metadata.agent_type", "itinerary")
-                    current_span.set_attribute("metadata.agent_node", "itinerary_node")
+                    current_span.set_attribute("metadata.agent_node", "itinerary_agent")
                     if user_input:
                         current_span.set_attribute("metadata.user_input", user_input)
             res = llm.invoke([SystemMessage(content=prompt_t.format(**vars_))])
@@ -840,25 +840,27 @@ def itinerary_agent(state: TripState) -> TripState:
 
 def build_graph():
     g = StateGraph(TripState)
-    g.add_node("research_node", research_agent)
-    g.add_node("budget_node", budget_agent)
-    g.add_node("local_node", local_agent)
-    g.add_node("itinerary_node", itinerary_agent)
+    g.add_node("research_agent", research_agent)
+    g.add_node("budget_agent", budget_agent)
+    g.add_node("local_agent", local_agent)
+    g.add_node("itinerary_agent", itinerary_agent)
 
     # Run research, budget, and local agents in parallel
-    g.add_edge(START, "research_node")
-    g.add_edge(START, "budget_node")
-    g.add_edge(START, "local_node")
+    g.add_edge(START, "research_agent")
+    g.add_edge(START, "budget_agent")
+    g.add_edge(START, "local_agent")
     
     # All three agents feed into the itinerary agent
-    g.add_edge("research_node", "itinerary_node")
-    g.add_edge("budget_node", "itinerary_node")
-    g.add_edge("local_node", "itinerary_node")
+    g.add_edge("research_agent", "itinerary_agent")
+    g.add_edge("budget_agent", "itinerary_agent")
+    g.add_edge("local_agent", "itinerary_agent")
     
-    g.add_edge("itinerary_node", END)
+    g.add_edge("itinerary_agent", END)
 
     # Compile without checkpointer to avoid state persistence issues
-    return g.compile()
+    compiled = g.compile()
+    compiled.name = "TripAgentGraph"
+    return compiled
 
 
 app = FastAPI(title="AI Trip Planner")

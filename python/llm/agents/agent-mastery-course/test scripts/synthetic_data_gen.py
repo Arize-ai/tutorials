@@ -309,6 +309,17 @@ def main():
         payload = scenario["request"].copy()
         print(f"\n#{i+1:02d} {scenario['name']} → {payload['destination']} ({payload['duration']})")
 
+        # Print the actual request details
+        print(f"   Request: destination='{payload.get('destination')}', duration='{payload.get('duration')}'")
+        if payload.get('budget'):
+            print(f"           budget='{payload['budget']}'")
+        if payload.get('interests'):
+            print(f"           interests='{payload['interests']}'")
+        if payload.get('travel_style'):
+            print(f"           travel_style='{payload['travel_style']}'")
+        if payload.get('user_input'):
+            print(f"           user_input='{payload['user_input'][:50]}...'" if len(payload['user_input']) > 50 else f"           user_input='{payload['user_input']}'")
+
         start = time.time()
         resp = post_plan_trip(args.base_url, payload)
         elapsed = time.time() - start
