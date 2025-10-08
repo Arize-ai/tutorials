@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from uuid import uuid4
+from contextlib import nullcontext
 import os
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
@@ -39,7 +41,7 @@ except Exception:
 # LangGraph + LangChain
 from langgraph.graph import StateGraph, END, START
 from langgraph.prebuilt import ToolNode
-from typing_extensions import TypedDict, Annotated
+from typing_extensions import TypedDict, Annotated, NotRequired
 import operator
 import json
 from pathlib import Path
@@ -66,6 +68,9 @@ class TripRequest(BaseModel):
     interests: Optional[str] = None
     travel_style: Optional[str] = None
     user_input: Optional[str] = None
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
+    turn_index: Optional[int] = None
 
 
 class TripResponse(BaseModel):
@@ -615,6 +620,9 @@ class TripState(TypedDict):
     local_context: Optional[str]
     final: Optional[str]
     tool_calls: Annotated[List[Dict[str, Any]], operator.add]
+    session_id: NotRequired[str]
+    user_id: NotRequired[Optional[str]]
+    turn_index: NotRequired[int]
 
 
 def research_agent(state: TripState) -> TripState:
@@ -903,17 +911,41 @@ if _TRACING:
 
 @app.post("/plan-trip", response_model=TripResponse)
 def plan_trip(req: TripRequest):
-
     graph = build_graph()
-    # Only include necessary fields in initial state
-    # Agent outputs (research, budget, local, final) will be added during execution
-    state = {
+
+    session_id = req.session_id or str(uuid4())
+    user_id = req.user_id
+    turn_idx = req.turn_index
+
+    state: Dict[str, Any] = {
         "messages": [],
         "trip_request": req.model_dump(),
         "tool_calls": [],
+        "session_id": session_id,
     }
-    # No config needed without checkpointer
-    out = graph.invoke(state)
+    if user_id:
+        state["user_id"] = user_id
+    if turn_idx is not None:
+        state["turn_index"] = turn_idx
+
+    # Build attributes for session and user tracking
+    # Note: using_attributes only accepts session_id and user_id as kwargs
+    attrs_kwargs = {}
+    if session_id:
+        attrs_kwargs["session_id"] = session_id
+    if user_id:
+        attrs_kwargs["user_id"] = user_id
+
+    # Add turn_index as a custom span attribute if provided
+    if turn_idx is not None and _TRACING:
+        with using_attributes(**attrs_kwargs):
+            current_span = trace.get_current_span()
+            if current_span:
+                current_span.set_attribute("turn_index", turn_idx)
+            out = graph.invoke(state)
+    else:
+        with using_attributes(**attrs_kwargs):
+            out = graph.invoke(state)
     return TripResponse(result=out.get("final", ""), tool_calls=out.get("tool_calls", []))
 
 
