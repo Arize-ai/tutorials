@@ -1,6 +1,6 @@
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 from tools import code_analysis, execute_code, generate_code, generate_merge_request_description, write_history
@@ -73,5 +73,5 @@ def construct_agent():
     workflow.add_conditional_edges("agent", router)
     workflow.add_edge("tools", "agent")
     workflow.add_conditional_edges("user_input", router)
-    checkpointer = MemorySaver()
+    checkpointer = InMemorySaver()
     return workflow.compile(checkpointer=checkpointer)

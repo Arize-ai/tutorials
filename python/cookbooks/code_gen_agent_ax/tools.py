@@ -3,7 +3,7 @@ import os
 import sys
 from datetime import datetime
 
-from langchain.agents import tool
+from langchain_core.tools import tool
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables.config import RunnableConfig
 from langchain_openai import ChatOpenAI
