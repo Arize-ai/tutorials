@@ -35,6 +35,11 @@ from langchain_core.tools import tool
 from langchain_core.documents import Document
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.vectorstores import InMemoryVectorStore
+
+# Not using langchain_community.llms.ollama because the prompt/response format is too different from the others used
+# Using ollama library directly fits better
+from ollama import chat as OllamaInvoke ### WIP add ollama
+
 import httpx
 
 # Make MCP import optional
@@ -59,6 +64,35 @@ class TripResponse(BaseModel):
     tool_calls: List[Dict[str, Any]] = []
 
 
+class ChatOllama():
+    model: str
+    tools=[]
+
+    def __init__(self, model):
+        self.model = model
+        self.tools = [] # Not implemented
+        pass
+
+    def invoke(self, messages):
+        # Ollama expects specific message format
+        ollamaMessages = []
+        # Ollama only returns if user content. If only has system messages, will return empty response
+        for msg in messages:
+            ollamaMsg={
+                "content": msg.content,
+                "role": 'user'
+            }
+            ollamaMessages.append(ollamaMsg)
+            #
+        #
+        # expected return is the message object
+        response = OllamaInvoke(model=self.model, messages=ollamaMessages, tools=self.tools)
+        return response.message
+
+    def bind_tools(self, tools=[]):
+        # Not implemented
+        return self
+
 def _init_llm():
     # Simple, test-friendly LLM init
     class _Fake:
@@ -74,7 +108,7 @@ def _init_llm():
 
     if os.getenv("TEST_MODE"):
         return _Fake()
-    if os.getenv("OPENAI_API_KEY"):
+    elif os.getenv("OPENAI_API_KEY"):
         return ChatOpenAI(model="gpt-3.5-turbo", temperature=0.7, max_tokens=1500)
     elif os.getenv("OPENROUTER_API_KEY"):
         # Use OpenRouter via OpenAI-compatible client
@@ -84,9 +118,14 @@ def _init_llm():
             model=os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
             temperature=0.7,
         )
+    elif os.getenv("OLLAMA_MODEL"):
+        # Use Ollama local model
+        return ChatOllama(
+            model=os.getenv("OLLAMA_MODEL")
+        )
     else:
         # Require a key unless running tests
-        raise ValueError("Please set OPENAI_API_KEY or OPENROUTER_API_KEY in your .env")
+        raise ValueError("Please set OPENAI_API_KEY or OPENROUTER_API_KEY or OLLAMA_MODEL in your .env")
 
 
 llm = _init_llm()

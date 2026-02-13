@@ -320,7 +320,8 @@
       renderIcons();
 
       try {
-        const resp = await fetch('/plan-trip', {
+        var url = 'http://localhost:8000/plan-trip'
+        const resp = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ destination, duration, budget, interests })
