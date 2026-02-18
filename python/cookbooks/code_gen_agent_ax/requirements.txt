@@ -58,7 +58,7 @@ orjson==3.11.5
 ormsgpack==1.12.2
 packaging==25.0
 pandas==2.3.3
-pillow==12.1.0
+pillow==12.1.1
 protobuf==6.33.5
 pyarrow==23.0.0
 pydantic==2.12.5
