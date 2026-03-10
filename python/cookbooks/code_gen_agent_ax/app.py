@@ -137,4 +137,5 @@ with gr.Blocks() as demo:
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
-    demo.launch(share=True, server_name="0.0.0.0", server_port=port)
+    server_name = os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1")
+    demo.launch(share=True, server_name=server_name, server_port=port)
