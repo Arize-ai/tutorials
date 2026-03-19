@@ -40,7 +40,6 @@ You can run these tutorials in your preferred environment:
 - [Documentation](https://docs.arize.com/arize)
 - [Example Gallery](https://docs.arize.com/arize/examples)
 - [Blog](https://arize.com/blog)
-- [Community Slack](https://arize-ai.slack.com/join/shared_invite/zt-11t1vbu4x-xkBIHmOREQnYnYDH1GDfCg)
 
 ## License
 
