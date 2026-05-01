@@ -1,7 +1,7 @@
 arize==8.5.0
 arize-otel==0.11.0
 gradio==6.9.0
-langchain-openai==1.1.11
+langchain-openai==1.1.14
 langgraph==1.1.0
 openinference.instrumentation.langchain==0.1.61
 openinference.instrumentation.openai==0.1.41
