@@ -160,7 +160,6 @@ These are demo DAGs — `schedule=None` and `catchup=False` so they only run on 
 
 - **Provider guide:** [arize.com/docs/ax/integrations/orchestration/airflow/airflow-provider](https://arize.com/docs/ax/integrations/orchestration/airflow/airflow-provider)
 - **Operator reference:** [arize.com/docs/ax/integrations/orchestration/airflow/airflow-operators](https://arize.com/docs/ax/integrations/orchestration/airflow/airflow-operators)
-- **Provider source & issues:** [github.com/Arize-ai/arize-ax-airflow](https://github.com/Arize-ai/arize-ax-airflow)
 - **Arize AX docs:** [arize.com/docs/ax](https://arize.com/docs/ax/)
 
 ---
