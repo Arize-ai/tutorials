@@ -39,8 +39,12 @@ User configuration:
   per-agent metadata tag (yields readable group keys); otherwise spans
   group by system-prompt fingerprint.
 - ``OPENAI_API_KEY`` in the worker environment.
-- ``arize-ax-airflow-provider[prompt_learning]`` installed in the worker
-  (Python 3.12+ recommended).
+- ``prompt-learning-enhanced`` installed in the worker — installed
+  separately because PyPI rejects direct-URL deps so the provider can no
+  longer declare it as an extra (Python 3.12+ recommended)::
+
+      pip install 'arize-phoenix-evals>=2.0,<3.0' \\
+                  'prompt-learning-enhanced @ git+https://github.com/Arize-ai/prompt-learning.git'
 
 Point the DAG at a project and trigger it — every system prompt with
 production feedback in the lookback window gets optimized and a new

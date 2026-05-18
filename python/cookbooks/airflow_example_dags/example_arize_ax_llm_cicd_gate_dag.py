@@ -24,8 +24,14 @@ Pipeline stages
 7. **compare_experiments** — compute per-metric deltas and an overall pass/
    fail verdict (ArizeAxCompareExperimentsOperator).  Raises AirflowException
    when ``fail_on_regression=True`` and the candidate did not improve.
-8. **promote_notification** — placeholder for a real deployment hook; logs a
-   promotion message to the Airflow task log.
+8. **check_prompt_configured** — short-circuit the promotion path if no
+   ``arize_ax_prompt_name`` Variable is set (gate-only mode).
+9. **promote_prompt** — tag the configured prompt version with the
+   ``arize_ax_prompt_label`` label (ArizeAxPromotePromptOperator).  Only
+   runs when the gate passed *and* a prompt name is configured.
+10. **promote_notification** — placeholder for a real deployment hook; logs
+    the promotion outcome (and which label was applied) to the Airflow task
+    log.
 
 Variables
 ---------
@@ -33,6 +39,10 @@ Variables
   ``default_space`` when absent.
 - ``arize_ax_baseline_experiment_id`` — experiment ID of the production
   baseline to compare against. **Required.** The DAG skips when not set.
+- ``arize_ax_prompt_name`` — name of the prompt to promote on gate pass.
+  Optional. When unset the DAG runs in gate-only mode (no promotion).
+- ``arize_ax_prompt_label`` — label to apply to the promoted prompt version
+  (default ``"production"``).
 
 Requires:
   - Airflow connection ``arize_ax_default`` with a valid API key.
@@ -60,6 +70,9 @@ from airflow.providers.arize_ax.operators.experiments import (
     ArizeAxCompareExperimentsOperator,
     ArizeAxGetExperimentScoreOperator,
     ArizeAxRunExperimentOperator,
+)
+from airflow.providers.arize_ax.operators.prompts import (
+    ArizeAxPromotePromptOperator,
 )
 from airflow.providers.arize_ax.sensors.arize_ax import (
     ArizeAxExperimentRunCountSensor,
@@ -89,6 +102,23 @@ def _check_baseline_configured(**ctx) -> bool:
         print(
             "Set the arize_ax_baseline_experiment_id Variable to a real experiment ID "
             "to run this CI/CD gate pipeline."
+        )
+        return False
+    return True
+
+
+def _check_prompt_configured(**ctx) -> bool:
+    """Return True only if arize_ax_prompt_name Variable is set.
+
+    When unset, the DAG runs in gate-only mode: the regression gate still
+    fires (compare_experiments raises on regression) but no prompt is
+    promoted.  The promote_prompt and promote_notification tasks are skipped.
+    """
+    prompt_name = Variable.get("arize_ax_prompt_name", default_var=None)
+    if not prompt_name or prompt_name.strip() in ("", "your-prompt-name"):
+        print(
+            "arize_ax_prompt_name Variable is not set — running in gate-only mode. "
+            "Set it to a real prompt name to enable automatic promotion on pass."
         )
         return False
     return True
@@ -127,13 +157,26 @@ def _promote_notification(**ctx) -> dict[str, Any]:
     """
     candidate_id = ctx["ti"].xcom_pull(task_ids="run_candidate_experiment")
     scores = ctx["ti"].xcom_pull(task_ids="score_candidate") or {}
+    promoted_version_id = ctx["ti"].xcom_pull(task_ids="promote_prompt")
+    prompt_name = Variable.get("arize_ax_prompt_name", default_var=None)
+    prompt_label = Variable.get("arize_ax_prompt_label", default_var="production")
     print("=" * 60)
     print("CANDIDATE PROMOTED")
     print(f"  Experiment ID : {candidate_id}")
     print(f"  Scores        : {scores}")
+    print(f"  Prompt name   : {prompt_name}")
+    print(f"  Prompt label  : {prompt_label}")
+    print(f"  Prompt verId  : {promoted_version_id}")
     print("  Next step     : trigger deployment pipeline (not implemented in this stub).")
     print("=" * 60)
-    return {"promoted": True, "experiment_id": candidate_id, "scores": scores}
+    return {
+        "promoted": True,
+        "experiment_id": candidate_id,
+        "scores": scores,
+        "prompt_name": prompt_name,
+        "prompt_label": prompt_label,
+        "prompt_version_id": promoted_version_id,
+    }
 
 
 with DAG(
@@ -213,7 +256,21 @@ with DAG(
         fail_on_regression=True,
     )
 
-    # Stage 6 — Promotion (only reached if compare_experiments passes)
+    # Stage 6a — Short-circuit promotion path if no prompt is configured
+    check_prompt_configured = ShortCircuitOperator(
+        task_id="check_prompt_configured",
+        python_callable=_check_prompt_configured,
+    )
+
+    # Stage 6b — Promote the prompt version with the configured label
+    promote_prompt = ArizeAxPromotePromptOperator(
+        task_id="promote_prompt",
+        prompt_name="{{ var.value.get('arize_ax_prompt_name', '') }}",
+        label="{{ var.value.get('arize_ax_prompt_label', 'production') }}",
+        space_id="{{ var.value.get('arize_ax_space_id', None) }}",
+    )
+
+    # Stage 7 — Promotion notification (only reached on gate-pass + promote)
     promote_notification = PythonOperator(
         task_id="promote_notification",
         python_callable=_promote_notification,
@@ -223,4 +280,5 @@ with DAG(
     check_baseline_configured >> create_candidate_dataset >> append_candidate_examples >> run_candidate_experiment
     run_candidate_experiment >> wait_for_candidate
     wait_for_candidate >> [score_candidate, score_baseline]
-    [score_candidate, score_baseline] >> compare_experiments >> promote_notification
+    [score_candidate, score_baseline] >> compare_experiments
+    compare_experiments >> check_prompt_configured >> promote_prompt >> promote_notification

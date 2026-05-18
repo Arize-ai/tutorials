@@ -68,7 +68,10 @@ from airflow.providers.arize_ax.operators.spans import (
 )
 
 _TMP_PARQUET = "/tmp/rag_spans_{{ ds }}.parquet"
-_RAG_SPAN_WHERE = "span_kind='RETRIEVER' OR span_kind='LLM'"
+_RAG_SPAN_WHERE = (
+    "attributes.openinference.span.kind='RETRIEVER' "
+    "OR attributes.openinference.span.kind='LLM'"
+)
 
 
 def _extract_project_name(**ctx) -> str:

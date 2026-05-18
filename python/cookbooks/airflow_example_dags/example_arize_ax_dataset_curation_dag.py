@@ -104,7 +104,7 @@ with DAG(
         task_id="curate_high_quality_spans",
         project_id="{{ var.value.get('arize_ax_project_id', '') }}",
         dataset_id="{{ var.value.get('arize_ax_dataset_id', '') }}",
-        where="evals['correctness'].score > 0.85",
+        where="eval.user_frustration.score > 0.85",
         # Manual triggers leave data_interval_start == data_interval_end (both
         # equal logical_date), and the SDK's exporter validates start < end
         # strictly. Compute a 24h window off logical_date so manual triggers

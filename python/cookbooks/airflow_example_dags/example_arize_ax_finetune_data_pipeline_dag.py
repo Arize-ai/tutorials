@@ -184,7 +184,7 @@ with DAG(
         project_id="{{ var.value.get('arize_ax_project_id', '') }}",
         output_path="/tmp/finetune_{{ ds }}.jsonl",
         output_format="openai_jsonl",
-        where="evals['correctness'].score > 0.8",
+        where="eval.user_frustration.score > 0.8",
         start_time="{{ (logical_date - macros.timedelta(days=7)).isoformat() }}",
         end_time="{{ logical_date.isoformat() }}",
         system_prompt=SYSTEM_PROMPT,
