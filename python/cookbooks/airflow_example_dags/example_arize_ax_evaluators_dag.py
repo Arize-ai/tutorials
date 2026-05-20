@@ -39,20 +39,15 @@ from typing import Any
 
 from airflow import DAG
 from airflow.models import Variable
-
-try:
-    from airflow.providers.standard.operators.python import (
-        PythonOperator,
-        ShortCircuitOperator,
-    )
-except ImportError:
-    from airflow.operators.python import PythonOperator, ShortCircuitOperator
-
 from airflow.providers.arize_ax.operators.evaluators import (
     ArizeAxAddEvaluatorVersionOperator,
     ArizeAxCreateEvaluatorOperator,
     ArizeAxListEvaluatorsOperator,
     ArizeAxUpdateEvaluatorOperator,
+)
+from airflow.providers.standard.operators.python import (
+    PythonOperator,
+    ShortCircuitOperator,
 )
 
 

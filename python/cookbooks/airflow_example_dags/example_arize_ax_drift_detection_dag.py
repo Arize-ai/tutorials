@@ -56,17 +56,6 @@ from typing import Any
 
 from airflow import DAG
 from airflow.models import Variable
-
-try:
-    from airflow.task.trigger_rule import TriggerRule
-except ImportError:
-    from airflow.utils.trigger_rule import TriggerRule
-
-try:
-    from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
-except ImportError:
-    from airflow.operators.python import PythonOperator, ShortCircuitOperator
-
 from airflow.providers.arize_ax.operators.experiments import (
     ArizeAxDetectEvalDriftOperator,
     ArizeAxRunExperimentOperator,
@@ -77,6 +66,8 @@ from airflow.providers.arize_ax.operators.prompts import (
 from airflow.providers.arize_ax.sensors.arize_ax import (
     ArizeAxExperimentRunCountSensor,
 )
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.task.trigger_rule import TriggerRule
 
 # ---------------------------------------------------------------------------
 # Constants — adjust to your environment

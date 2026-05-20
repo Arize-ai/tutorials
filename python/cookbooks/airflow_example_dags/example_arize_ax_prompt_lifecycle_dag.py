@@ -74,12 +74,6 @@ from typing import Any
 
 from airflow import DAG
 from airflow.models import Variable
-
-try:
-    from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
-except ImportError:
-    from airflow.operators.python import PythonOperator, ShortCircuitOperator
-
 from airflow.providers.arize_ax.operators.datasets import (
     ArizeAxAppendDatasetExamplesOperator,
     ArizeAxCreateDatasetOperator,
@@ -96,6 +90,7 @@ from airflow.providers.arize_ax.operators.prompts import (
 from airflow.providers.arize_ax.sensors.arize_ax import (
     ArizeAxExperimentRunCountSensor,
 )
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
 
 # ---------------------------------------------------------------------------
 # Constants — adjust to your environment
