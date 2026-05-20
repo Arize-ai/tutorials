@@ -23,10 +23,13 @@ Pipeline::
    prompt group. Each instance calls the Arize Prompt Learning SDK to
    produce a revised system prompt informed by that group's own feedback.
 3. **create_optimized_prompt** — ``ArizeAxCreatePromptOperator`` expanded
-   over the optimize output so every improved prompt is pushed (or
-   version-bumped via ``if_exists="skip"``) to the Arize Prompt Hub. The
-   created prompt name includes the ``group_key`` so each agent gets its
-   own named prompt.
+   over the optimize output so every improved prompt lands in the Arize
+   Prompt Hub. The created prompt name includes the ``group_key`` and the
+   current date so each agent gets a uniquely-named prompt per run; on
+   same-day retries ``if_exists="skip"`` returns the existing prompt ID
+   without modifying anything. To version-bump under a single stable name
+   instead (one prompt that accumulates revisions over time), use
+   ``if_exists="add_version"``.
 
 User configuration:
 - Airflow connection ``arize_ax_default`` with API key.

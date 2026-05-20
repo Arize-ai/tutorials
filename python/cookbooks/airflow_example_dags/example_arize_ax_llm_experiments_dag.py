@@ -55,12 +55,6 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from airflow import DAG
-
-try:
-    from airflow.providers.standard.operators.python import PythonOperator
-except ImportError:
-    from airflow.operators.python import PythonOperator
-
 from airflow.providers.arize_ax.operators.datasets import (
     ArizeAxCreateDatasetOperator,
     ArizeAxDeleteDatasetOperator,
@@ -84,11 +78,8 @@ from airflow.providers.arize_ax.operators.spaces import (
 from airflow.providers.arize_ax.sensors.arize_ax import (
     ArizeAxDatasetReadySensor,
 )
-
-try:
-    from airflow.providers.standard.sensors.time_delta import TimeDeltaSensor
-except ImportError:
-    from airflow.sensors.time_delta import TimeDeltaSensor
+from airflow.providers.standard.operators.python import PythonOperator
+from airflow.providers.standard.sensors.time_delta import TimeDeltaSensor
 
 INSPECTION_WINDOW_MINUTES = 15
 

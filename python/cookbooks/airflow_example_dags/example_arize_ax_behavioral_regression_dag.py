@@ -33,22 +33,6 @@ from typing import Any
 
 from airflow import DAG
 from airflow.models import Variable
-
-try:
-    from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
-except ImportError:
-    from airflow.operators.python import PythonOperator, ShortCircuitOperator
-
-try:
-    from airflow.providers.standard.sensors.time_delta import TimeDeltaSensor
-except ImportError:
-    from airflow.sensors.time_delta import TimeDeltaSensor
-
-try:
-    from airflow.task.trigger_rule import TriggerRule
-except ImportError:
-    from airflow.utils.trigger_rule import TriggerRule
-
 from airflow.providers.arize_ax.operators.datasets import (
     ArizeAxCreateDatasetOperator,
     ArizeAxDeleteDatasetOperator,
@@ -63,6 +47,9 @@ from airflow.providers.arize_ax.operators.tasks import (
     ArizeAxTriggerTaskRunOperator,
 )
 from airflow.providers.arize_ax.sensors.arize_ax import ArizeAxTaskRunSensor
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.providers.standard.sensors.time_delta import TimeDeltaSensor
+from airflow.task.trigger_rule import TriggerRule
 
 _SPACE_ID = "{{ var.value.get('arize_ax_space_id', '') or None }}"
 
