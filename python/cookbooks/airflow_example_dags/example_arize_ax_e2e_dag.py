@@ -79,6 +79,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from airflow import DAG
+from airflow.providers.arize_ax.hooks.arize_ax import ArizeAxHook
 from airflow.providers.arize_ax.operators.ai_integrations import (
     ArizeAxCreateAIIntegrationOperator,
     ArizeAxDeleteAIIntegrationOperator,
@@ -185,6 +186,9 @@ from airflow.providers.arize_ax.sensors.arize_ax import (
     ArizeAxSpanCountSensor,
     ArizeAxSpanIngestionSensor,
     ArizeAxTaskRunSensor,
+)
+from airflow.providers.arize_ax.utils.task_groups import (
+    arize_ax_chained_experiment_eval,
 )
 from airflow.providers.standard.operators.python import (
     PythonOperator,
@@ -308,31 +312,48 @@ def _make_xcom_present_gate(*, task_ids: str, key: str | None = None) -> Any:
     return _gate
 
 
-def _build_run_configuration(**ctx) -> Any:
-    """Build a ``RunConfiguration`` for CreateRunExperimentTask using the
-    configured AI-integration Airflow Variable. Pushed to XCom so the
-    downstream operator can pull it.
-    """
-    from arize.tasks.types import LlmGenerationRunConfig, RunConfiguration
+def _build_run_configuration(integration_id: str | None = None, **ctx) -> dict[str, Any]:
+    """Build a run configuration dict for CreateRunExperimentTask.
 
-    integration_id = _get_first_var(
+    Resolution order for the AI integration:
+      1. The ``arize_ai_integration_id`` Airflow Variable (preferred). This
+         is expected to point at an integration with a REAL API key so the
+         LLM-generation step can actually call the provider.
+      2. Fallback: the freshly-created ``create_ai_integration`` integration
+         passed via ``op_kwargs``. **Note**: the DAG creates that fresh
+         integration with a *dummy* API key (``sk-e2e-dummy-do-not-use``)
+         to exercise the create/get/delete lifecycle without leaking real
+         credentials, so a run_experiment using it will fail at the LLM
+         call. Only used here when the Variable isn't set.
+
+    Returns the LlmGenerationRunConfig-shaped dict directly. The hook layer
+    calls ``RunConfiguration.from_dict`` for the typed wrapping internally
+    (SDK 8.27+), so user code doesn't need to import the typed model.
+    """
+    var_integration_id = _get_first_var(
         "arize_ai_integration_id", "ARIZE_AI_INTEGRATION_ID",
     )
+    if var_integration_id:
+        integration_id = var_integration_id
     if not integration_id:
         raise RuntimeError(
-            "AI-integration Variable required for this task "
-            "(set 'arize_ai_integration_id' or 'ARIZE_AI_INTEGRATION_ID')."
+            "build_run_config: an AI-integration ID is required. Either let "
+            "the DAG create one via 'create_ai_integration' (it is wired up "
+            "automatically), or set the 'arize_ai_integration_id' Airflow "
+            "Variable."
         )
-    llm_cfg = LlmGenerationRunConfig(
-        experiment_type="llm_generation",
-        ai_integration_id=integration_id,
-        model_name="gpt-4o-mini",
-        messages=[{"role": "user", "content": "Echo: {query}"}],
-        input_variable_format="f_string",
-        invocation_parameters={"temperature": 0},
-        provider_parameters={},
-    )
-    return RunConfiguration(llm_cfg).model_dump(mode="json")
+    # Use mustache + double-brace substitution for the run_experiment
+    # template — produces real LLM output (single-brace / f_string can
+    # leave the placeholder unsubstituted depending on backend handling).
+    return {
+        "experiment_type": "llm_generation",
+        "ai_integration_id": integration_id,
+        "model_name": "gpt-4o-mini",
+        "messages": [{"role": "user", "content": "Echo: {{query}}"}],
+        "input_variable_format": "mustache",
+        "invocation_parameters": {"temperature": 0},
+        "provider_parameters": {},
+    }
 
 
 def _build_evaluator_template_config(**ctx) -> dict[str, Any]:
@@ -348,8 +369,13 @@ def _build_evaluator_template_config(**ctx) -> dict[str, Any]:
     suffix = (ctx.get("ts_nodash") or "x")[-8:]
     return {
         "name": f"e2e_eval_{suffix}",
+        # Template variables must match the experiment run's input column
+        # names. This DAG's dataset uses ``query`` (the dataset's input
+        # column) — referencing ``{input}`` here would fail substitution
+        # with "Task was unable to handle template variable: input".
+        # ``{output}`` is the LLM's output and is always available.
         "template": (
-            "Evaluate the response. Input: {input}\nOutput: {output}\n"
+            "Evaluate the response. Input: {query}\nOutput: {output}\n"
             "Respond with JSON label correct or incorrect."
         ),
         "include_explanations": False,
@@ -433,7 +459,18 @@ def _inspection_pause(**ctx) -> None:
 
 
 INSPECTION_WINDOW_MINUTES = 15
-SPACE_ID = "{{ ti.xcom_pull(task_ids='list_spaces', key='first_id') }}"
+# Prefer the user-configured ``arize_ax_space_id`` Airflow Variable so the
+# e2e DAG operates in the space the operator was wired against (where the
+# user's AI integration, datasets, projects, etc. live). Fall back to the
+# first space returned by ``list_spaces`` only if the Variable is unset —
+# convenient for first-time setup but historically a footgun, since
+# ``list_spaces.first_id`` can resolve to a different space than the one
+# the user has configured elsewhere, leading to cross-space "AI integration
+# not found" / "no spans" surprises.
+SPACE_ID = (
+    "{{ var.value.get('arize_ax_space_id', '') "
+    "or ti.xcom_pull(task_ids='list_spaces', key='first_id') }}"
+)
 
 
 with DAG(
@@ -877,10 +914,103 @@ with DAG(
         run_id="{{ ti.xcom_pull(task_ids='trigger_task_run') }}",
     )
 
+    def _log_synthetic_spans(**ctx) -> int:
+        """Push a tiny set of OpenInference-shaped spans into the fresh
+        project so that ``trigger_task_run`` (span-scoped template_evaluation)
+        has data to evaluate.
+
+        Without this, the freshly-created project has 0 spans and the eval
+        trigger fires ``skip_on_no_data=True`` → cascade-skip on
+        ``task_run_sensor`` / ``get_task_run`` / ``cancel_task_run``.
+
+        Uses ``hook.log_spans`` (which hits ``client.spans.log``) with a
+        minimal OpenInference parent-span shape.
+        """
+        import time
+        from datetime import datetime, timezone
+
+        import pandas as pd
+
+        ti = ctx["ti"]
+        project_name = "e2e-proj-" + ctx["ts_nodash"]
+        space_id = (
+            ti.xcom_pull(task_ids="list_spaces", key="first_id")
+            or ctx["dag_run"].conf.get("space_id")
+        )
+        # Try the Variable first (matches the DAG's SPACE_ID resolution).
+        try:
+            from airflow.models import Variable
+            space_var = Variable.get("arize_ax_space_id", default_var=None)
+            if space_var:
+                space_id = space_var
+        except Exception:
+            pass
+
+        # Build 3 spans with the minimum OpenInference column set.
+        now_ns = int(time.time() * 1e9)
+        rows = []
+        for i in range(3):
+            rows.append({
+                "context.span_id": f"e2e-span-{ctx['ts_nodash']}-{i:03d}",
+                "context.trace_id": f"e2e-trace-{ctx['ts_nodash']}-{i:03d}",
+                "name": "smoke-eval-target",
+                "span_kind": "LLM",
+                "attributes.input.value": f"echo: hello world {i}",
+                "attributes.output.value": f"hello world {i}",
+                "attributes.openinference.span.kind": "LLM",
+                "start_time": datetime.fromtimestamp(
+                    (now_ns - 60_000_000_000 + i * 1_000_000_000) / 1e9,
+                    tz=timezone.utc,
+                ),
+                "end_time": datetime.fromtimestamp(
+                    (now_ns - 59_000_000_000 + i * 1_000_000_000) / 1e9,
+                    tz=timezone.utc,
+                ),
+                "status_code": "OK",
+            })
+        df = pd.DataFrame(rows)
+
+        hook = ArizeAxHook()
+        resp = hook.log_spans(
+            space_id=space_id,
+            project_name=project_name,
+            dataframe=df,
+        )
+        print(f"[log_synthetic_spans] logged {len(rows)} spans to '{project_name}': {resp}")
+        return len(rows)
+
+    log_synthetic_spans = PythonOperator(
+        task_id="log_synthetic_spans",
+        python_callable=_log_synthetic_spans,
+    )
+
+    # log_synthetic_spans returns 200 OK immediately, but Arize's ingestion
+    # pipeline is async (Kafka → backend → queryable store) and takes
+    # tens of seconds to minutes to make the spans visible to ``spans.list``.
+    # Best-effort: if ingestion hasn't completed in 5 minutes, soft_fail so
+    # the downstream span-scoped eval trigger skips gracefully (its own
+    # ``skip_on_no_data=True`` handles the no-data path) rather than
+    # blocking the entire DAG run on observability latency.
+    wait_for_synthetic_spans = ArizeAxSpanCountSensor(
+        task_id="wait_for_synthetic_spans",
+        project_id="{{ ti.xcom_pull(task_ids='create_project') }}",
+        min_count=1,
+        poke_interval=10,
+        timeout=300,  # up to 5 minutes for ingestion
+        mode="poke",
+        soft_fail=True,
+    )
+
     # Run-experiment task variant.
+    # Wire in the freshly-created AI integration so the run_experiment task
+    # references one that exists in the DAG's own space — the legacy
+    # path-of-reading-a-Variable can leak a cross-space integration ID.
     build_run_config = PythonOperator(
         task_id="build_run_config",
         python_callable=_build_run_configuration,
+        op_kwargs={
+            "integration_id": "{{ ti.xcom_pull(task_ids='create_ai_integration') }}",
+        },
     )
     create_run_experiment_task = ArizeAxCreateRunExperimentTaskOperator(
         task_id="create_run_experiment_task",
@@ -889,6 +1019,29 @@ with DAG(
         run_configuration="{{ ti.xcom_pull(task_ids='build_run_config') }}",
         space_id=SPACE_ID,
         if_exists="skip",
+    )
+
+    # Demonstrate server-side experiment → evaluation chaining (SDK 8.27+).
+    # Arize triggers the run_experiment task, and once it completes the listed
+    # evaluation tasks run automatically against the new spans — no extra
+    # Airflow task needed to wait + fan out. Reuses ``create_task`` (a
+    # project-scoped template_evaluation task built earlier in this DAG) so
+    # the chain has a real evaluator on the other side.
+    #
+    # Uses the ``arize_ax_chained_experiment_eval`` TaskGroup helper so DAG
+    # authors get trigger + (optional) sensor + (optional) get_result wired
+    # up in one call, instead of hand-rolling three operators. Here we keep
+    # the default ``wait_for_completion=False`` — the rest of the e2e DAG
+    # is fire-and-forget at this step.
+    trigger_chained_experiment_run = arize_ax_chained_experiment_eval(
+        group_id="trigger_chained_experiment_run",
+        task_id_param="{{ ti.xcom_pull(task_ids='create_run_experiment_task') }}",
+        space_id=SPACE_ID,
+        experiment_name="e2e-chained-{{ ts_nodash }}",
+        max_examples=2,
+        evaluation_task_ids=[
+            "{{ ti.xcom_pull(task_ids='create_task') }}",
+        ],
     )
 
     # Phase 8 -- Annotations lifecycle
@@ -938,13 +1091,6 @@ with DAG(
         space=SPACE_ID,
         instructions="updated by e2e DAG",
     )
-    list_annotation_queue_records = ArizeAxListAnnotationQueueRecordsOperator(
-        task_id="list_annotation_queue_records",
-        annotation_queue="{{ ti.xcom_pull(task_ids='create_annotation_queue') }}",
-        space=SPACE_ID,
-        limit=5,
-    )
-
     # Manually inject a record source so AddAnnotationQueueRecords has work to do.
     add_annotation_queue_records = ArizeAxAddAnnotationQueueRecordsOperator(
         task_id="add_annotation_queue_records",
@@ -958,6 +1104,47 @@ with DAG(
                 "dataset_id": "{{ ti.xcom_pull(task_ids='create_dataset') }}",
             },
         ],
+    )
+
+    def _wait_for_annotation_queue_records(**ctx) -> int:
+        """Poll the queue until at least one record materializes.
+
+        ``add_annotation_queue_records`` returns immediately, but the backend
+        scans the dataset and adds each example as a queue record
+        asynchronously. Without this wait, ``list_annotation_queue_records``
+        races and returns an empty list, causing the entire annotate /
+        assign / delete branch to skip.
+        """
+        import time
+        ti = ctx["ti"]
+        queue_id = ti.xcom_pull(task_ids="create_annotation_queue")
+        hook = ArizeAxHook()
+        for attempt in range(20):  # 20 × 3s = up to 60s
+            try:
+                result = hook.list_annotation_queue_records(
+                    annotation_queue=queue_id, limit=10,
+                )
+                items = (result or {}).get("items") if isinstance(result, dict) else None
+                count = len(items or [])
+                if count > 0:
+                    print(f"[wait] queue has {count} record(s) after {attempt * 3}s")
+                    return count
+            except Exception as exc:  # noqa: BLE001
+                print(f"[wait] attempt {attempt} probe error: {exc}")
+            time.sleep(3)
+        print("[wait] timed out after 60s — queue still empty, downstream will skip")
+        return 0
+
+    wait_for_annotation_queue_records = PythonOperator(
+        task_id="wait_for_annotation_queue_records",
+        python_callable=_wait_for_annotation_queue_records,
+    )
+
+    list_annotation_queue_records = ArizeAxListAnnotationQueueRecordsOperator(
+        task_id="list_annotation_queue_records",
+        annotation_queue="{{ ti.xcom_pull(task_ids='create_annotation_queue') }}",
+        space=SPACE_ID,
+        limit=5,
     )
 
     annotation_queue_sensor = ArizeAxAnnotationQueueSensor(
@@ -1268,10 +1455,17 @@ with DAG(
     # Phase 7: tasks (gated, depend on evaluator + project)
     [create_evaluator, create_project] >> gate_tasks
     gate_tasks >> create_task >> [get_task, list_task_runs, update_task]
-    create_task >> trigger_task_run >> [get_task_run, task_run_sensor]
+    # Span-scoped eval trigger needs spans in the project AND those spans
+    # need to be ingested into the queryable path before the trigger fires.
+    create_project >> log_synthetic_spans >> wait_for_synthetic_spans
+    [create_task, wait_for_synthetic_spans] >> trigger_task_run >> [get_task_run, task_run_sensor]
     [trigger_task_run, task_run_sensor] >> gate_cancel_run >> cancel_task_run
-    gate_tasks >> build_run_config >> create_run_experiment_task
+    # build_run_config now consumes create_ai_integration's XCom, so we need
+    # that upstream too (in addition to gate_tasks).
+    [gate_tasks, create_ai_integration] >> build_run_config >> create_run_experiment_task
     create_dataset >> create_run_experiment_task
+    # Chained trigger needs the eval task to be created first.
+    [create_task, create_run_experiment_task] >> trigger_chained_experiment_run
 
     # Phase 8: annotations
     list_spaces >> create_annotation_config
@@ -1280,10 +1474,13 @@ with DAG(
     create_annotation_queue >> [
         get_annotation_queue,
         update_annotation_queue,
-        list_annotation_queue_records,
         add_annotation_queue_records,
         annotation_queue_sensor,
     ]
+    # Wait for the queue records to actually materialize before listing.
+    # ``add_annotation_queue_records`` is fire-and-forget on the backend.
+    add_annotation_queue_records >> wait_for_annotation_queue_records
+    wait_for_annotation_queue_records >> list_annotation_queue_records
     list_annotation_queue_records >> pick_first_queue_record >> gate_queue_records
     gate_queue_records >> [annotate_queue_record, assign_queue_record]
     [annotate_queue_record, assign_queue_record] >> delete_annotation_queue_records
