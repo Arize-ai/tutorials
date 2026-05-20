@@ -71,12 +71,6 @@ from typing import Any
 
 from airflow import DAG
 from airflow.models import Variable
-
-try:
-    from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
-except ImportError:
-    from airflow.operators.python import PythonOperator, ShortCircuitOperator
-
 from airflow.providers.arize_ax.operators.evaluators import (
     ArizeAxCreateEvaluatorOperator,
     ArizeAxDeleteEvaluatorOperator,
@@ -87,6 +81,7 @@ from airflow.providers.arize_ax.operators.tasks import (
     ArizeAxTriggerTaskRunOperator,
 )
 from airflow.providers.arize_ax.sensors.arize_ax import ArizeAxTaskRunSensor
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
 
 # Optional Airflow Variable ``arize_ax_project_name`` targets a specific
 # project by name (e.g. "langraph-financial-agent-trace"); falls back to the

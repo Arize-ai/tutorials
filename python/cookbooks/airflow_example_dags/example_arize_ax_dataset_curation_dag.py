@@ -33,18 +33,13 @@ from datetime import datetime
 from typing import Any
 
 from airflow import DAG
-
-try:
-    from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
-except ImportError:
-    from airflow.operators.python import PythonOperator, ShortCircuitOperator
-
 from airflow.providers.arize_ax.operators.datasets import (
     ArizeAxListDatasetExamplesOperator,
 )
 from airflow.providers.arize_ax.operators.spans import (
     ArizeAxCurateSpansToDatasetOperator,
 )
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
 
 
 def _check_curated(**ctx) -> bool:

@@ -46,12 +46,6 @@ from datetime import datetime
 from typing import Any
 
 from airflow import DAG
-
-try:
-    from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
-except ImportError:
-    from airflow.operators.python import PythonOperator, ShortCircuitOperator
-
 from airflow.providers.arize_ax.operators.datasets import (
     ArizeAxAppendDatasetExamplesOperator,
     ArizeAxCreateDatasetOperator,
@@ -59,6 +53,7 @@ from airflow.providers.arize_ax.operators.datasets import (
 from airflow.providers.arize_ax.operators.spans import (
     ArizeAxExportSpansToFineTuningOperator,
 )
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
 
 SYSTEM_PROMPT = (
     "You are a helpful, accurate assistant. Answer concisely and factually."

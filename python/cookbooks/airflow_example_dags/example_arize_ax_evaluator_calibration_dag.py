@@ -38,25 +38,16 @@ from typing import Any
 
 from airflow import DAG
 from airflow.models import Variable
-
-try:
-    from airflow.providers.standard.operators.python import (
-        PythonOperator,
-        ShortCircuitOperator,
-    )
-except ImportError:
-    from airflow.operators.python import PythonOperator, ShortCircuitOperator
-
-try:
-    from airflow.utils.trigger_rule import TriggerRule
-except ImportError:  # Airflow 3.x sdk path
-    from airflow.sdk.definitions._internal.trigger_rule import TriggerRule
-
 from airflow.providers.arize_ax.operators.experiments import (
     ArizeAxEvaluatorCalibrationOperator,
     ArizeAxRunExperimentOperator,
 )
 from airflow.providers.arize_ax.sensors.arize_ax import ArizeAxExperimentRunCountSensor
+from airflow.providers.standard.operators.python import (
+    PythonOperator,
+    ShortCircuitOperator,
+)
+from airflow.task.trigger_rule import TriggerRule
 
 
 def _check_dataset_configured(**ctx) -> bool:

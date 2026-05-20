@@ -46,12 +46,6 @@ from typing import Any
 
 from airflow import DAG
 from airflow.models import Variable
-
-try:
-    from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
-except ImportError:
-    from airflow.operators.python import PythonOperator, ShortCircuitOperator
-
 from airflow.providers.arize_ax.operators.datasets import (
     ArizeAxAppendDatasetExamplesOperator,
     ArizeAxCreateDatasetOperator,
@@ -66,6 +60,7 @@ from airflow.providers.arize_ax.operators.projects import (
 from airflow.providers.arize_ax.operators.spans import (
     ArizeAxSpansExportToParquetOperator,
 )
+from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
 
 _TMP_PARQUET = "/tmp/rag_spans_{{ ds }}.parquet"
 _RAG_SPAN_WHERE = (
