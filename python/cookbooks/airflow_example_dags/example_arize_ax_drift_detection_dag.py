@@ -1,52 +1,59 @@
 """
-Drift Detection & Auto-Rollback DAG: scheduled evaluation watchdog with prompt
-rollback when drift is detected.
+Drift Detection & Auto-Rollback DAG (server-side, self-contained).
 
-This DAG runs daily to guard against degradation in LLM evaluation scores.  It
-creates a fresh "current" experiment, waits for it to complete, then compares
-it against a known-good baseline experiment.  When drift is detected the
-ArizeAxDetectEvalDriftOperator raises AirflowException (``fail_on_drift=True``)
-causing the task to fail (red), making the drift event visible and preventing
-downstream promotion.  A separate ``rollback_prompt`` branch is triggered by
-catching the failure with an Airflow trigger rule, or can be wired as a
-separate monitoring pipeline.
+This DAG demonstrates the production watchdog pattern: a scheduled run
+provisions a *baseline* experiment (a strong known-good config), then runs
+a *current* experiment with a deliberately-degraded system prompt to make
+drift actually fire. ``ArizeAxDetectEvalDriftOperator`` (with
+``fail_on_drift=True``) raises ``AirflowException`` when the per-metric
+delta exceeds the threshold, which triggers the rollback branch
+(``trigger_rule="all_failed"``): the stable prompt version is re-promoted
+to the ``"production"`` label, and a notification fires. Everything is
+provisioned and torn down on every run — no external Variables required.
 
 Pipeline stages
 ---------------
-1. **run_current_eval** — run a daily evaluation experiment against a shared
-   eval dataset (ArizeAxRunExperimentOperator).
-2. **wait_for_current** — block until the experiment has enough completed runs
-   (ArizeAxExperimentRunCountSensor).
-3. **detect_drift** — compare the current experiment against the configured
-   baseline and raise AirflowException if drift is found
-   (ArizeAxDetectEvalDriftOperator with ``fail_on_drift=True``).
-4. **rollback_prompt** — re-promote the known-stable prompt version to the
-   ``"production"`` label (ArizeAxPromotePromptOperator).  Runs only when
-   detect_drift fails, via ``trigger_rule="all_failed"``.
-5. **notify_rollback** — log rollback confirmation; placeholder for
-   Slack/email integration.
+0. **check_prereqs** — short-circuit if ``ARIZE_AI_INTEGRATION_ID`` isn't
+   resolvable.
+1. **create_eval_dataset** — provision the evaluation dataset.
+2. **build_accuracy_judge_config / create_accuracy_evaluator** — build the
+   accuracy LLM-as-judge config and create an evaluator (per-run-unique
+   name to avoid the soft-delete tombstone trap).
+3. **create_accuracy_eval_task** — wrap the evaluator in a
+   ``template_evaluation`` task.
+4. **create_demo_prompt** — create the demo prompt that the rollback
+   targets. Its single version is the "known stable" version we re-promote
+   when drift fires.
+5. **build_baseline_run_config / create_baseline_run_exp_task** — register
+   a ``run_experiment`` task with a *good* system prompt.
+6. **run_baseline_experiment.{trigger,wait,get_result}** — fire baseline
+   with the accuracy judge chained server-side.
+7. **build_current_run_config / create_current_run_exp_task** — register a
+   ``run_experiment`` task with a deliberately-degraded "Always reply
+   exactly 'I don't know.'" system prompt that drives accuracy to 0.
+8. **run_current_experiment.{trigger,wait,get_result}** — fire current
+   serially after baseline (avoids the Arize concurrent-trigger stall).
+9. **detect_drift** — compare current vs baseline. With
+   ``fail_on_drift=True`` and a 0.1 threshold this *raises*
+   ``AirflowException`` because current_avg ≈ 0 vs baseline_avg ≈ 1.
+10. **rollback_prompt** — fires only on ``ALL_FAILED`` of detect_drift.
+    Re-promotes the stable prompt version to ``"production"``.
+11. **notify_rollback** — logs the rollback outcome (``trigger_rule=ALL_DONE``).
+12. **cleanup_*** — delete the per-run-ephemeral evaluator, eval task, the
+    two run-experiment tasks, the dataset, and the demo prompt.
 
 Schedule: ``@daily``
 
 Variables
 ---------
 - ``arize_ax_space_id`` — Arize space ID (required).
-- ``arize_ax_eval_dataset_id`` — dataset ID to run evaluations against.
-- ``arize_ax_baseline_experiment_id`` — experiment ID of the known-good
-  baseline to compare against.
-- ``arize_ax_prompt_name`` — name of the prompt to roll back.
-- ``arize_ax_stable_prompt_version_id`` — version ID of the stable prompt
-  version to promote back to ``"production"``.
+- ``arize_ax_project_id`` — project ID used to scope the accuracy eval task.
+- ``arize_ai_integration_id`` *or* env var ``ARIZE_AI_INTEGRATION_ID`` —
+  OpenAI integration in Arize with gpt-4.1 access.
 
-Constants (edit in this file or override via Variables):
-- ``DRIFT_MIN_RUNS`` — minimum runs before scoring (default 5).
-- ``DRIFT_THRESHOLD`` — absolute score drop that triggers rollback (default 0.1).
-
-Requires:
-  - Airflow connection ``arize_ax_default`` with a valid API key.
-  - Variables ``arize_ax_space_id``, ``arize_ax_eval_dataset_id``,
-    ``arize_ax_baseline_experiment_id``, ``arize_ax_prompt_name``,
-    ``arize_ax_stable_prompt_version_id``.
+Constants:
+- ``DRIFT_THRESHOLD`` — absolute score drop that triggers rollback
+  (default 0.1).
 """
 
 from __future__ import annotations
@@ -56,164 +63,342 @@ from typing import Any
 
 from airflow import DAG
 from airflow.models import Variable
+from airflow.providers.arize_ax.operators.datasets import (
+    ArizeAxCreateDatasetOperator,
+    ArizeAxDeleteDatasetOperator,
+)
+from airflow.providers.arize_ax.operators.evaluators import (
+    ArizeAxCreateEvaluatorOperator,
+    ArizeAxDeleteEvaluatorOperator,
+)
 from airflow.providers.arize_ax.operators.experiments import (
     ArizeAxDetectEvalDriftOperator,
-    ArizeAxRunExperimentOperator,
 )
 from airflow.providers.arize_ax.operators.prompts import (
+    ArizeAxCreatePromptOperator,
+    ArizeAxDeletePromptOperator,
     ArizeAxPromotePromptOperator,
 )
-from airflow.providers.arize_ax.sensors.arize_ax import (
-    ArizeAxExperimentRunCountSensor,
+from airflow.providers.arize_ax.operators.tasks import (
+    ArizeAxCreateRunExperimentTaskOperator,
+    ArizeAxCreateTaskOperator,
+    ArizeAxDeleteTaskOperator,
+)
+from airflow.providers.arize_ax.utils.task_groups import (
+    arize_ax_chained_experiment_eval,
 )
 from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
 from airflow.task.trigger_rule import TriggerRule
 
-# ---------------------------------------------------------------------------
-# Constants — adjust to your environment
-# ---------------------------------------------------------------------------
-DRIFT_MIN_RUNS = 5
-DRIFT_THRESHOLD = 0.1  # flag metrics that dropped more than 10 points
+DRIFT_THRESHOLD = 0.1
+
+DRIFT_EVAL_EXAMPLES = [
+    {"query": "What is the capital of France?", "expected_output": "Paris"},
+    {"query": "What is 7 multiplied by 8?", "expected_output": "56"},
+    {"query": "Who wrote Hamlet?", "expected_output": "William Shakespeare"},
+    {"query": "What element has atomic number 1?", "expected_output": "Hydrogen"},
+    {"query": "How many continents are there?", "expected_output": "7"},
+]
+
+_SPACE_JINJA = "{{ var.value.get('arize_ax_space_id', '') or None }}"
+
+_RUN_SUFFIX = (
+    "{{ run_id | replace(':', '') | replace('-', '') | replace('+', '') "
+    "| replace('.', '') | replace('_', '') }}"
+)
+
+ACCURACY_TEMPLATE = (
+    "[Question]: {query}\n"
+    "[Expected]: {expected_output}\n"
+    "[Output]: {output}\n\n"
+    "Reply with ONLY 'correct' or 'incorrect'."
+)
+
+BASELINE_SYSTEM_PROMPT = (
+    "You are a helpful, accurate assistant. Answer the question with only "
+    "the direct factual answer — no extra explanation or punctuation."
+)
+# Deliberately adversarial so current_avg drops to ~0 and drift > threshold.
+CURRENT_SYSTEM_PROMPT = (
+    "You are a confused assistant. Always reply with exactly the string "
+    "\"I don't know.\" — never anything else."
+)
 
 
+def _resolve_integration_id() -> str:
+    return (
+        Variable.get("arize_ai_integration_id", default_var="").strip()
+        or Variable.get("ARIZE_AI_INTEGRATION_ID", default_var="").strip()
+    )
 
-def _check_pipeline_configured(**ctx) -> bool:
-    """Return True only when all required Variables are set for drift detection."""
-    required = {
-        "arize_ax_eval_dataset_id": "an evaluation dataset ID",
-        "arize_ax_baseline_experiment_id": "a baseline experiment ID",
-        "arize_ax_prompt_name": "the prompt name to roll back",
-        "arize_ax_stable_prompt_version_id": "the stable prompt version ID",
-    }
-    missing = []
-    for key, description in required.items():
-        val = Variable.get(key, default_var=None)
-        if not val or val.strip() in ("", f"your-{key.split('_', 2)[-1].replace('_', '-')}"):
-            missing.append(f"  - {key}: set to {description}")
-    if missing:
+
+def _check_prereqs(**_ctx) -> bool:
+    if not _resolve_integration_id():
         print(
-            "The following Variables must be set to run the drift detection pipeline:\n"
-            + "\n".join(missing)
+            "ARIZE_AI_INTEGRATION_ID env var or arize_ai_integration_id "
+            "Variable must be set."
         )
         return False
     return True
 
 
-def _eval_task(dataset_row: dict) -> dict:
-    """Evaluation task: echo the expected output as a stub.
+def _build_accuracy_judge_config(**_ctx) -> dict[str, Any]:
+    return {
+        "name": "drift_accuracy_judge",
+        "template": ACCURACY_TEMPLATE,
+        "include_explanations": True,
+        "use_function_calling_if_available": False,
+        "classification_choices": {"correct": 1.0, "incorrect": 0.0},
+        "llm_config": {
+            "ai_integration_id": _resolve_integration_id(),
+            "model_name": "gpt-4o-mini",
+            "invocation_parameters": {"temperature": 0},
+            "provider_parameters": {},
+        },
+    }
 
-    Replace with a real LLM call in production, e.g.::
 
-        response = openai.chat.completions.create(...)
-        return {"output": response.choices[0].message.content}
-    """
-    return {"output": dataset_row.get("expected_output", "")}
+def _build_run_config(model: str, system_prompt: str):
+    def _callable(**_ctx) -> dict[str, Any]:
+        return {
+            "experiment_type": "llm_generation",
+            "ai_integration_id": _resolve_integration_id(),
+            "model_name": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                # run_experiment messages use mustache substitution.
+                {"role": "user", "content": "{{query}}"},
+            ],
+            "input_variable_format": "mustache",
+            "invocation_parameters": {"temperature": 0},
+            "provider_parameters": {},
+        }
 
-
-def _accuracy_evaluator(dataset_row: dict, output: Any) -> Any:
-    """Simple exact-match accuracy evaluator."""
-    from arize.experiments import EvaluationResult
-
-    if output is None:
-        return EvaluationResult(score=0.0, label="error", explanation="no output")
-    actual = output.get("output", "") if isinstance(output, dict) else str(output)
-    expected = dataset_row.get("expected_output", "")
-    match = str(actual).strip().lower() == str(expected).strip().lower()
-    return EvaluationResult(
-        score=1.0 if match else 0.0,
-        label="correct" if match else "incorrect",
-        explanation=f"expected={expected!r}, got={actual!r}",
-    )
+    _callable.__name__ = f"_build_run_config_{model.replace('-', '_').replace('.', '_')}"
+    return _callable
 
 
 def _notify_rollback(**ctx) -> dict[str, Any]:
-    """Log rollback confirmation.
-
-    In production, add a Slack/email notification here, e.g.::
-
-        import slack_sdk
-        client = slack_sdk.WebClient(token=os.environ["SLACK_BOT_TOKEN"])
-        client.chat_postMessage(
-            channel="#ops-alerts",
-            text=f"Prompt rolled back: {prompt_name} -> stable version",
-        )
-    """
-    rollback_result = ctx["ti"].xcom_pull(task_ids="rollback_prompt") or {}
-    prompt_id = rollback_result.get("prompt_id")
-    label = rollback_result.get("label")
-
+    """Log rollback confirmation; placeholder for Slack/email integration."""
+    rollback = ctx["ti"].xcom_pull(task_ids="rollback_prompt") or {}
+    prompt_id = rollback.get("prompt_id") if isinstance(rollback, dict) else None
+    label = rollback.get("label") if isinstance(rollback, dict) else None
     print("=" * 60)
     print("PROMPT ROLLBACK COMPLETE")
     print(f"  Prompt ID : {prompt_id}")
     print(f"  Label     : {label}")
-    print("  Action    : notification sent (replace stub with Slack/email/webhook).")
     print("=" * 60)
     return {"notified": True, "prompt_id": prompt_id, "label": label}
 
 
 with DAG(
     dag_id="arize_ax_drift_detection",
-    start_date=datetime(2025, 1, 1),
+    start_date=datetime(2026, 1, 1),
     schedule="@daily",
-    tags=["arize_ax", "drift", "experiments", "prompts", "rollback"],
+    tags=["arize_ax", "drift", "experiments", "prompts", "rollback", "eval-hub", "self-contained"],
     catchup=False,
     doc_md=__doc__,
+    render_template_as_native_obj=True,
 ) as dag:
 
-    # Stage 0 — Guard: skip DAG if required Variables are not configured
-    check_pipeline_configured = ShortCircuitOperator(
-        task_id="check_pipeline_configured",
-        python_callable=_check_pipeline_configured,
+    check_prereqs = ShortCircuitOperator(
+        task_id="check_prereqs",
+        python_callable=_check_prereqs,
     )
 
-    # Stage 1 — Run today's evaluation experiment
-    run_current_eval = ArizeAxRunExperimentOperator(
-        task_id="run_current_eval",
-        name="drift-check-current-{{ ds }}",
-        dataset_id="{{ var.value.get('arize_ax_eval_dataset_id', '') }}",
-        task=_eval_task,
-        evaluators=[_accuracy_evaluator],
-        concurrency=4,
+    # ----- Phase 1: dataset -------------------------------------------------
+    create_eval_dataset = ArizeAxCreateDatasetOperator(
+        task_id="create_eval_dataset",
+        space_id=_SPACE_JINJA,
+        name=f"drift-eval-dataset-{_RUN_SUFFIX}",
+        examples=DRIFT_EVAL_EXAMPLES,
+        if_exists="skip",
     )
 
-    # Stage 2 — Wait for runs to complete
-    wait_for_current = ArizeAxExperimentRunCountSensor(
-        task_id="wait_for_current",
-        experiment_id="{{ ti.xcom_pull(task_ids='run_current_eval') }}",
-        min_runs=DRIFT_MIN_RUNS,
-        poke_interval=15,
-        timeout=600,
-        mode="poke",
-        soft_fail=True,
+    # ----- Phase 2: accuracy judge ------------------------------------------
+    build_accuracy_judge_config = PythonOperator(
+        task_id="build_accuracy_judge_config",
+        python_callable=_build_accuracy_judge_config,
+    )
+    create_accuracy_evaluator = ArizeAxCreateEvaluatorOperator(
+        task_id="create_accuracy_evaluator",
+        space_id=_SPACE_JINJA,
+        name=f"drift_accuracy_judge_{_RUN_SUFFIX}",
+        evaluator_type="template",
+        commit_message="initial drift accuracy judge",
+        template_config_task_id="build_accuracy_judge_config",
+        description="LLM-as-judge for drift detection.",
+    )
+    create_accuracy_eval_task = ArizeAxCreateTaskOperator(
+        task_id="create_accuracy_eval_task",
+        name=f"drift-accuracy-task-{_RUN_SUFFIX}",
+        eval_task_type="template_evaluation",
+        evaluators=[
+            {"evaluator_id": "{{ ti.xcom_pull(task_ids='create_accuracy_evaluator') }}"},
+        ],
+        project_id="{{ var.value.get('arize_ax_project_id', '') or None }}",
+        is_continuous=False,
+        sampling_rate=1.0,
     )
 
-    # Stage 3 — Detect drift vs baseline (raises on drift)
+    # ----- Phase 3: demo prompt (the rollback target) -----------------------
+    create_demo_prompt = ArizeAxCreatePromptOperator(
+        task_id="create_demo_prompt",
+        space_id=_SPACE_JINJA,
+        name=f"drift-demo-prompt-{_RUN_SUFFIX}",
+        messages=[
+            {"role": "system", "content": BASELINE_SYSTEM_PROMPT},
+            {"role": "user", "content": "{query}"},
+        ],
+        model="gpt-4.1",
+        commit_message="known-stable prompt version (rollback target)",
+        input_variable_format="f_string",
+    )
+
+    # ----- Phase 4: baseline experiment (good config) -----------------------
+    build_baseline_run_config = PythonOperator(
+        task_id="build_baseline_run_config",
+        python_callable=_build_run_config("gpt-4.1", BASELINE_SYSTEM_PROMPT),
+    )
+    create_baseline_run_exp_task = ArizeAxCreateRunExperimentTaskOperator(
+        task_id="create_baseline_run_exp_task",
+        space_id=_SPACE_JINJA,
+        name=f"drift-baseline-task-{_RUN_SUFFIX}",
+        dataset_id="{{ ti.xcom_pull(task_ids='create_eval_dataset') }}",
+        run_configuration="{{ ti.xcom_pull(task_ids='build_baseline_run_config') }}",
+        if_exists="skip",
+    )
+    run_baseline_experiment = arize_ax_chained_experiment_eval(
+        group_id="run_baseline_experiment",
+        task_id_param="{{ ti.xcom_pull(task_ids='create_baseline_run_exp_task') }}",
+        experiment_name=f"drift-baseline-{_RUN_SUFFIX}",
+        space_id=_SPACE_JINJA,
+        evaluation_task_ids=[
+            "{{ ti.xcom_pull(task_ids='create_accuracy_eval_task') }}",
+        ],
+        wait_for_completion=True,
+        sensor_timeout=900,
+        sensor_poke_interval=15,
+        fail_on_run_error=True,
+    )
+
+    # ----- Phase 5: current (deliberately degraded) experiment --------------
+    build_current_run_config = PythonOperator(
+        task_id="build_current_run_config",
+        python_callable=_build_run_config("gpt-4.1", CURRENT_SYSTEM_PROMPT),
+    )
+    create_current_run_exp_task = ArizeAxCreateRunExperimentTaskOperator(
+        task_id="create_current_run_exp_task",
+        space_id=_SPACE_JINJA,
+        name=f"drift-current-task-{_RUN_SUFFIX}",
+        dataset_id="{{ ti.xcom_pull(task_ids='create_eval_dataset') }}",
+        run_configuration="{{ ti.xcom_pull(task_ids='build_current_run_config') }}",
+        if_exists="skip",
+    )
+    run_current_experiment = arize_ax_chained_experiment_eval(
+        group_id="run_current_experiment",
+        task_id_param="{{ ti.xcom_pull(task_ids='create_current_run_exp_task') }}",
+        experiment_name=f"drift-current-{_RUN_SUFFIX}",
+        space_id=_SPACE_JINJA,
+        evaluation_task_ids=[
+            "{{ ti.xcom_pull(task_ids='create_accuracy_eval_task') }}",
+        ],
+        wait_for_completion=True,
+        sensor_timeout=900,
+        sensor_poke_interval=15,
+        fail_on_run_error=True,
+    )
+
+    # ----- Phase 6: drift detection (expected to fire) ----------------------
+    _BASELINE_EXP_ID = (
+        "{{ ti.xcom_pull(task_ids='run_baseline_experiment.trigger', "
+        "key='result')['experiment_id'] }}"
+    )
+    _CURRENT_EXP_ID = (
+        "{{ ti.xcom_pull(task_ids='run_current_experiment.trigger', "
+        "key='result')['experiment_id'] }}"
+    )
     detect_drift = ArizeAxDetectEvalDriftOperator(
         task_id="detect_drift",
-        current_experiment_id="{{ ti.xcom_pull(task_ids='run_current_eval') }}",
-        baseline_experiment_id="{{ var.value.get('arize_ax_baseline_experiment_id', '') }}",
+        current_experiment_id=_CURRENT_EXP_ID,
+        baseline_experiment_id=_BASELINE_EXP_ID,
         drift_threshold=DRIFT_THRESHOLD,
         aggregation="mean",
         fail_on_drift=True,
     )
 
-    # Stage 4 — Roll back prompt when drift was detected (task failed)
+    # ----- Phase 7: rollback (only fires when drift detected) ---------------
     rollback_prompt = ArizeAxPromotePromptOperator(
         task_id="rollback_prompt",
-        prompt_name="{{ var.value.get('arize_ax_prompt_name', '') }}",
+        prompt_name=f"drift-demo-prompt-{_RUN_SUFFIX}",
         label="production",
-        space_id="{{ var.value.get('arize_ax_space_id', None) }}",
-        version_id="{{ var.value.get('arize_ax_stable_prompt_version_id', None) }}",
+        space_id=_SPACE_JINJA,
         trigger_rule=TriggerRule.ALL_FAILED,
     )
-
-    # Stage 5 — Notify (Slack/email placeholder)
     notify_rollback = PythonOperator(
         task_id="notify_rollback",
         python_callable=_notify_rollback,
         trigger_rule=TriggerRule.ALL_DONE,
     )
 
-    # Wiring
-    check_pipeline_configured >> run_current_eval >> wait_for_current >> detect_drift
-    detect_drift >> rollback_prompt >> notify_rollback
+    # ----- Phase 8: cleanup -------------------------------------------------
+    cleanup_accuracy_eval_task = ArizeAxDeleteTaskOperator(
+        task_id="cleanup_accuracy_eval_task",
+        task_id_param="{{ ti.xcom_pull(task_ids='create_accuracy_eval_task') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+    cleanup_baseline_run_exp_task = ArizeAxDeleteTaskOperator(
+        task_id="cleanup_baseline_run_exp_task",
+        task_id_param="{{ ti.xcom_pull(task_ids='create_baseline_run_exp_task') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+    cleanup_current_run_exp_task = ArizeAxDeleteTaskOperator(
+        task_id="cleanup_current_run_exp_task",
+        task_id_param="{{ ti.xcom_pull(task_ids='create_current_run_exp_task') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+    cleanup_accuracy_evaluator = ArizeAxDeleteEvaluatorOperator(
+        task_id="cleanup_accuracy_evaluator",
+        evaluator_id="{{ ti.xcom_pull(task_ids='create_accuracy_evaluator') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+    cleanup_dataset = ArizeAxDeleteDatasetOperator(
+        task_id="cleanup_dataset",
+        dataset_id="{{ ti.xcom_pull(task_ids='create_eval_dataset') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+    cleanup_demo_prompt = ArizeAxDeletePromptOperator(
+        task_id="cleanup_demo_prompt",
+        prompt_id="{{ ti.xcom_pull(task_ids='create_demo_prompt') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+
+    # Wiring — baseline runs first, then current (serially) to avoid the
+    # Arize concurrent-trigger stall we observed under parallel fan-out.
+    check_prereqs >> [
+        create_eval_dataset,
+        build_accuracy_judge_config,
+        build_baseline_run_config,
+        build_current_run_config,
+        create_demo_prompt,
+    ]
+    build_accuracy_judge_config >> create_accuracy_evaluator >> create_accuracy_eval_task
+    [create_eval_dataset, build_baseline_run_config] >> create_baseline_run_exp_task
+    [create_eval_dataset, build_current_run_config] >> create_current_run_exp_task
+    [create_baseline_run_exp_task, create_accuracy_eval_task] >> run_baseline_experiment
+    [run_baseline_experiment, create_current_run_exp_task, create_accuracy_eval_task] >> run_current_experiment
+    run_current_experiment >> detect_drift >> rollback_prompt >> notify_rollback
+    notify_rollback >> [
+        cleanup_accuracy_eval_task,
+        cleanup_baseline_run_exp_task,
+        cleanup_current_run_exp_task,
+        cleanup_accuracy_evaluator,
+        cleanup_dataset,
+        cleanup_demo_prompt,
+    ]

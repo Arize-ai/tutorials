@@ -1,42 +1,55 @@
 """
-RAG Quality Evaluation DAG: automated daily faithfulness and relevance scoring.
+RAG Quality Evaluation DAG (server-side, self-contained):
+faithfulness and context-relevance scoring for a context-augmented LLM.
 
-This DAG implements an automated daily pipeline that:
-1. Exports production RAG spans (RETRIEVER + LLM) from the previous 24 hours.
-2. Packages them into an evaluation dataset.
-3. Runs two Python evaluator experiments:
-   - **faithfulness**: does the LLM output stay grounded in the retrieved
-     context?  Score 1.0 = fully grounded, 0.0 = hallucinated.
-   - **context_relevance**: is the retrieved context actually relevant to the
-     user query?  Score 1.0 = highly relevant, 0.0 = irrelevant.
-4. Scores both experiments and logs a quality summary.
+This DAG demonstrates RAG-style evaluation end-to-end without depending on
+any production span pipeline. It builds a small synthetic dataset of
+``(query, context, expected_output)`` rows, registers a server-side
+``run_experiment`` task that drives a context-aware ``gpt-4.1`` LLM call,
+and chains two ``template_evaluation`` LLM-as-judges that run server-side
+after each row's LLM response is produced:
 
-Metrics computed
-----------------
-- ``faithfulness``: mean faithfulness score across all evaluated spans.
-- ``context_relevance``: mean context relevance score across evaluated spans.
+- **faithfulness** — does the model's answer stay grounded in the
+  retrieved context, or does it hallucinate beyond it?
+- **context_relevance** — was the retrieved context actually relevant to
+  the user query in the first place?
 
-The ``report_rag_quality`` task pushes a summary dict to XCom so downstream
-alerting DAGs (e.g. a Slack notifier) can read it with
-``xcom_pull(dag_id="arize_ax_rag_evaluation", task_ids="report_rag_quality")``.
+It is fully self-contained — no pre-existing project, dataset, evaluator,
+or production spans required. Everything is provisioned and torn down on
+every run.
+
+Pipeline stages
+---------------
+0. **check_prereqs** — short-circuit if ``ARIZE_AI_INTEGRATION_ID`` isn't
+   resolvable.
+1. **create_rag_dataset** — provision a tiny synthetic RAG dataset.
+2. **build_faithfulness_judge_config / create_faithfulness_evaluator /
+   create_faithfulness_eval_task** — the LLM-as-judge that scores whether
+   each response is grounded in its context.
+3. **build_relevance_judge_config / create_relevance_evaluator /
+   create_relevance_eval_task** — the LLM-as-judge that scores whether
+   each context is relevant to its query.
+4. **build_rag_run_config / create_rag_run_exp_task** — register a
+   ``run_experiment`` task whose system prompt asks the model to answer
+   strictly from the provided context.
+5. **run_rag_experiment.{trigger,wait,get_result}** — fire the experiment
+   with **both** judges chained via ``evaluation_task_ids``; Arize
+   executes faithfulness + context_relevance server-side after each row.
+6. **score_faithfulness / score_context_relevance** — aggregate the two
+   eval metrics from the chained experiment runs.
+7. **report_rag_quality** — log a quality summary and push it to XCom for
+   downstream alerting.
+8. **cleanup_*** — delete the per-run-ephemeral evaluators, eval tasks,
+   run-experiment task, and dataset.
+
+Schedule: ``@daily`` (each manual or scheduled run is fully self-contained).
 
 Variables
 ---------
-- ``arize_ax_project_name`` — Arize project **name** containing production RAG spans.
-  If absent, the first project returned by list_projects is used.
-- ``arize_ax_space_id``     — Arize space ID used to export spans and create datasets.
-  Required: ArizeAxListProjectsOperator and ArizeAxCreateDatasetOperator will raise
-  AirflowException with a clear message if this Variable is absent.
-
-Schedule
---------
-Daily at midnight UTC (``@daily``).  Each run evaluates the spans from the
-previous calendar day via the Jinja macros ``data_interval_start`` and
-``data_interval_end``.
-
-Requires:
-  - Airflow connection ``arize_ax_default`` with a valid API key.
-  - Variable ``arize_ax_space_id`` — required by list_projects and create_dataset operators.
+- ``arize_ax_space_id`` — Arize space ID (required).
+- ``arize_ax_project_id`` — project ID used to scope the eval tasks.
+- ``arize_ai_integration_id`` *or* env var ``ARIZE_AI_INTEGRATION_ID`` —
+  OpenAI integration in Arize with gpt-4.1 access.
 """
 
 from __future__ import annotations
@@ -47,351 +60,383 @@ from typing import Any
 from airflow import DAG
 from airflow.models import Variable
 from airflow.providers.arize_ax.operators.datasets import (
-    ArizeAxAppendDatasetExamplesOperator,
     ArizeAxCreateDatasetOperator,
+    ArizeAxDeleteDatasetOperator,
+)
+from airflow.providers.arize_ax.operators.evaluators import (
+    ArizeAxCreateEvaluatorOperator,
+    ArizeAxDeleteEvaluatorOperator,
 )
 from airflow.providers.arize_ax.operators.experiments import (
     ArizeAxGetExperimentScoreOperator,
-    ArizeAxRunExperimentOperator,
 )
-from airflow.providers.arize_ax.operators.projects import (
-    ArizeAxListProjectsOperator,
+from airflow.providers.arize_ax.operators.tasks import (
+    ArizeAxCreateRunExperimentTaskOperator,
+    ArizeAxCreateTaskOperator,
+    ArizeAxDeleteTaskOperator,
 )
-from airflow.providers.arize_ax.operators.spans import (
-    ArizeAxSpansExportToParquetOperator,
+from airflow.providers.arize_ax.utils.task_groups import (
+    arize_ax_chained_experiment_eval,
 )
 from airflow.providers.standard.operators.python import PythonOperator, ShortCircuitOperator
 
-_TMP_PARQUET = "/tmp/rag_spans_{{ ds }}.parquet"
-_RAG_SPAN_WHERE = (
-    "attributes.openinference.span.kind='RETRIEVER' "
-    "OR attributes.openinference.span.kind='LLM'"
+# Synthetic RAG-style dataset: each row has a query, a retrieved context
+# block, and a reference answer. The LLM is asked to answer from the
+# context; the two judges score faithfulness (output vs context) and
+# context_relevance (context vs query).
+RAG_EVAL_EXAMPLES = [
+    {
+        "query": "What is the capital of France?",
+        "context": (
+            "France is a country in Western Europe. Its capital and "
+            "largest city is Paris, on the Seine river."
+        ),
+        "expected_output": "Paris",
+    },
+    {
+        "query": "How many continents are there?",
+        "context": (
+            "Geographers traditionally divide the world into seven "
+            "continents: Africa, Antarctica, Asia, Australia, Europe, "
+            "North America, and South America."
+        ),
+        "expected_output": "7",
+    },
+    {
+        "query": "Who wrote Hamlet?",
+        "context": (
+            "Hamlet is a tragedy written by the English playwright "
+            "William Shakespeare around the year 1600."
+        ),
+        "expected_output": "William Shakespeare",
+    },
+    {
+        "query": "What element has atomic number 1?",
+        "context": (
+            "Hydrogen, with chemical symbol H and atomic number 1, is "
+            "the lightest element in the periodic table."
+        ),
+        "expected_output": "Hydrogen",
+    },
+    {
+        "query": "What is the largest planet in our solar system?",
+        "context": (
+            "Jupiter is the fifth planet from the Sun and the largest "
+            "in our solar system — over twice as massive as all the "
+            "other planets combined."
+        ),
+        "expected_output": "Jupiter",
+    },
+]
+
+_SPACE_JINJA = "{{ var.value.get('arize_ax_space_id', '') or None }}"
+
+_RUN_SUFFIX = (
+    "{{ run_id | replace(':', '') | replace('-', '') | replace('+', '') "
+    "| replace('.', '') | replace('_', '') }}"
 )
 
+FAITHFULNESS_TEMPLATE = (
+    "[Context]: {context}\n"
+    "[Output]: {output}\n\n"
+    "Is the output fully grounded in the context (every claim supported), "
+    "or does it introduce information not present in the context?\n"
+    "Reply with ONLY 'faithful' (no fabricated content) or 'hallucinated' "
+    "(includes claims not supported by the context)."
+)
 
-def _extract_project_name(**ctx) -> str:
-    """Return the project name from ``arize_ax_project_name`` Variable.
+CONTEXT_RELEVANCE_TEMPLATE = (
+    "[Question]: {query}\n"
+    "[Context]: {context}\n\n"
+    "Is the context relevant to answering the question?\n"
+    "Reply with ONLY 'relevant' (the context contains information that "
+    "addresses the question) or 'irrelevant' (the context does not help "
+    "answer the question)."
+)
 
-    Falls back to the name of the first project returned by
-    ArizeAxListProjectsOperator if the Variable is not set.
-    """
-    project_name_var = Variable.get("arize_ax_project_name", default_var=None)
-    if project_name_var:
-        return project_name_var
-
-    result = ctx["ti"].xcom_pull(task_ids="check_project_exists")
-    items = result.get("items", []) if isinstance(result, dict) else []
-    if not items:
-        raise ValueError(
-            "No projects found. Set Variable 'arize_ax_project_name' to your project name."
-        )
-    first_item = items[0]
-    name = first_item.get("name") if isinstance(first_item, dict) else None
-    if not name:
-        raise ValueError(
-            "Project item has no 'name' field. "
-            "Set Variable 'arize_ax_project_name' explicitly."
-        )
-    return str(name)
-
-
-def _check_has_spans(**ctx) -> bool:
-    """Return True if the parquet export produced at least one span."""
-    parquet_path = ctx["ti"].xcom_pull(task_ids="export_rag_spans")
-    if not parquet_path:
-        print("[check_has_spans] export task returned no path -- short-circuiting.")
-        return False
-    try:
-        import pandas as pd
-
-        df = pd.read_parquet(parquet_path)
-        count = len(df)
-        print(f"[check_has_spans] parquet has {count} rows.")
-        return count > 0
-    except Exception as exc:
-        print(f"[check_has_spans] could not read parquet: {exc} -- short-circuiting.")
-        return False
+# The run_experiment system prompt enforces the RAG contract: answer only
+# from the provided context. The user message bundles query + context
+# together using mustache substitution.
+RAG_SYSTEM_PROMPT = (
+    "You are a careful assistant that answers questions using ONLY the "
+    "provided context. If the context does not contain the answer, say "
+    "you don't know. Give only the direct factual answer — no extra "
+    "explanation or punctuation."
+)
+RAG_USER_TEMPLATE = "Context: {{context}}\n\nQuestion: {{query}}"
 
 
-def _prepare_rag_examples(**ctx) -> list[dict[str, Any]]:
-    """Load the exported parquet and extract input / output / context fields.
-
-    Returns a list of dataset example dicts ready for
-    ArizeAxAppendDatasetExamplesOperator.
-
-    Expected span columns (best-effort -- missing columns yield empty strings):
-    - ``input.value``   — the user query sent to the LLM / retriever
-    - ``output.value``  — the LLM response
-    - ``attributes.retrieval.documents`` — JSON list of retrieved document texts
-    """
-    import json
-
-    import pandas as pd
-
-    parquet_path = ctx["ti"].xcom_pull(task_ids="export_rag_spans")
-    if not parquet_path:
-        raise ValueError("No parquet path in XCom from export_rag_spans.")
-
-    df = pd.read_parquet(parquet_path)
-    examples: list[dict[str, Any]] = []
-    for _, row in df.iterrows():
-        input_val = str(row.get("input.value", row.get("input", "")))
-        output_val = str(row.get("output.value", row.get("output", "")))
-        raw_docs = row.get("attributes.retrieval.documents", row.get("retrieval.documents", ""))
-        if isinstance(raw_docs, str):
-            try:
-                docs = json.loads(raw_docs)
-                context = " ".join(
-                    d.get("document.content", "") if isinstance(d, dict) else str(d)
-                    for d in (docs if isinstance(docs, list) else [])
-                )
-            except (json.JSONDecodeError, TypeError):
-                context = raw_docs
-        elif isinstance(raw_docs, list):
-            context = " ".join(
-                d.get("document.content", "") if isinstance(d, dict) else str(d)
-                for d in raw_docs
-            )
-        else:
-            context = ""
-
-        if not input_val and not output_val:
-            continue  # skip empty rows
-
-        examples.append({
-            "query": input_val,
-            "response": output_val,
-            "context": context,
-        })
-
-    print(f"[prepare_rag_examples] produced {len(examples)} dataset examples.")
-    return examples
-
-
-def _faithfulness_evaluator(dataset_row: dict, output: Any) -> Any:
-    """Score whether the LLM response stays grounded in the retrieved context.
-
-    Uses a simple heuristic: if any non-trivial word from the response also
-    appears in the context, score = 1.0 (grounded); otherwise 0.0 (potential
-    hallucination).  Replace this with a real LLM-as-judge in production.
-    """
-    from arize.experiments import EvaluationResult
-
-    if output is None:
-        return EvaluationResult(score=0.0, label="error", explanation="task produced no output")
-
-    response = dataset_row.get("response", "")
-    context = dataset_row.get("context", "")
-
-    if not response or not context:
-        return EvaluationResult(
-            score=0.5,
-            label="unknown",
-            explanation="insufficient data to evaluate faithfulness",
-        )
-
-    response_words = {
-        w.lower() for w in response.split() if len(w) > 4
-    }
-    context_words = {
-        w.lower() for w in context.split() if len(w) > 4
-    }
-    overlap = response_words & context_words
-    grounded = len(overlap) >= max(1, len(response_words) // 4)
-
-    return EvaluationResult(
-        score=1.0 if grounded else 0.0,
-        label="grounded" if grounded else "hallucinated",
-        explanation=(
-            f"Overlap {len(overlap)}/{len(response_words)} meaningful words; "
-            f"threshold={max(1, len(response_words) // 4)}."
-        ),
+def _resolve_integration_id() -> str:
+    return (
+        Variable.get("arize_ai_integration_id", default_var="").strip()
+        or Variable.get("ARIZE_AI_INTEGRATION_ID", default_var="").strip()
     )
 
 
-def _context_relevance_evaluator(dataset_row: dict, output: Any) -> Any:
-    """Score whether the retrieved context is relevant to the user query.
-
-    Uses a simple heuristic: if any word from the query (>3 chars) appears in
-    the context, score = 1.0 (relevant); otherwise 0.0 (irrelevant).  Replace
-    this with a real LLM-as-judge in production.
-    """
-    from arize.experiments import EvaluationResult
-
-    query = dataset_row.get("query", "")
-    context = dataset_row.get("context", "")
-
-    if not query or not context:
-        return EvaluationResult(
-            score=0.5,
-            label="unknown",
-            explanation="insufficient data to evaluate context relevance",
+def _check_prereqs(**_ctx) -> bool:
+    if not _resolve_integration_id():
+        print(
+            "ARIZE_AI_INTEGRATION_ID env var or arize_ai_integration_id "
+            "Variable must be set."
         )
-
-    query_words = {w.lower() for w in query.split() if len(w) > 3}
-    context_words = {w.lower() for w in context.split() if len(w) > 3}
-    overlap = query_words & context_words
-    relevant = bool(overlap)
-
-    return EvaluationResult(
-        score=1.0 if relevant else 0.0,
-        label="relevant" if relevant else "irrelevant",
-        explanation=f"Query–context word overlap: {overlap or 'none'}.",
-    )
+        return False
+    return True
 
 
-# ---------------------------------------------------------------------------
-# Identity task: passes span data through to the experiment
-# ---------------------------------------------------------------------------
-def _rag_task(dataset_row: dict) -> dict:
-    """Identity task: surface the span's response field as the experiment output."""
+def _build_judge_config(name: str, template: str, choices: dict[str, float]):
+    """Factory: build a template_config dict for one of the two RAG judges."""
+
+    def _callable(**_ctx) -> dict[str, Any]:
+        return {
+            "name": name,
+            "template": template,
+            "include_explanations": True,
+            "use_function_calling_if_available": False,
+            "classification_choices": choices,
+            "llm_config": {
+                "ai_integration_id": _resolve_integration_id(),
+                "model_name": "gpt-4o-mini",
+                "invocation_parameters": {"temperature": 0},
+                "provider_parameters": {},
+            },
+        }
+
+    _callable.__name__ = f"_build_{name}_judge_config"
+    return _callable
+
+
+def _build_rag_run_config(**_ctx) -> dict[str, Any]:
     return {
-        "output": dataset_row.get("response", ""),
-        "query": dataset_row.get("query", ""),
-        "context": dataset_row.get("context", ""),
+        "experiment_type": "llm_generation",
+        "ai_integration_id": _resolve_integration_id(),
+        "model_name": "gpt-4.1",
+        "messages": [
+            {"role": "system", "content": RAG_SYSTEM_PROMPT},
+            {"role": "user", "content": RAG_USER_TEMPLATE},
+        ],
+        "input_variable_format": "mustache",
+        "invocation_parameters": {"temperature": 0},
+        "provider_parameters": {},
     }
 
 
 def _report_rag_quality(**ctx) -> dict[str, Any]:
-    """Log a RAG quality summary and push scores to XCom for downstream alerting."""
+    """Log RAG quality summary; push to XCom for downstream alerting."""
     ti = ctx["ti"]
     ds = ctx.get("ds", "unknown")
     faithfulness_scores = ti.xcom_pull(task_ids="score_faithfulness") or {}
-    relevance_scores = ti.xcom_pull(task_ids="score_relevance") or {}
-
-    faithfulness = faithfulness_scores.get("_faithfulness_evaluator")
-    relevance = relevance_scores.get("_context_relevance_evaluator")
+    relevance_scores = ti.xcom_pull(task_ids="score_context_relevance") or {}
 
     summary = {
         "date": ds,
-        "faithfulness_score": faithfulness,
-        "context_relevance_score": relevance,
+        "faithfulness_scores": faithfulness_scores,
+        "context_relevance_scores": relevance_scores,
     }
 
     print("=" * 60)
     print(f"RAG QUALITY REPORT — {ds}")
-    print(f"  Faithfulness score   : {faithfulness}")
-    print(f"  Context relevance    : {relevance}")
-    if faithfulness is not None and faithfulness < 0.7:
-        print("  WARNING: faithfulness below 0.7 — possible hallucination increase.")
-    if relevance is not None and relevance < 0.7:
-        print("  WARNING: context relevance below 0.7 — retrieval quality degraded.")
+    print(f"  Faithfulness        : {faithfulness_scores}")
+    print(f"  Context relevance   : {relevance_scores}")
     print("=" * 60)
     return summary
 
 
 with DAG(
     dag_id="arize_ax_rag_evaluation",
-    start_date=datetime(2025, 1, 1),
+    start_date=datetime(2026, 1, 1),
     schedule="@daily",
-    tags=["arize_ax", "rag", "evaluation", "daily"],
+    tags=["arize_ax", "rag", "evaluation", "eval-hub", "self-contained"],
     catchup=False,
     doc_md=__doc__,
     render_template_as_native_obj=True,
 ) as dag:
 
-    # Stage 1 — Discover project
-    check_project_exists = ArizeAxListProjectsOperator(
-        task_id="check_project_exists",
-        space_id="{{ var.value.get('arize_ax_space_id', None) }}",
-        limit=50,
+    check_prereqs = ShortCircuitOperator(
+        task_id="check_prereqs",
+        python_callable=_check_prereqs,
     )
 
-    extract_project_name = PythonOperator(
-        task_id="extract_project_name",
-        python_callable=_extract_project_name,
-    )
-
-    # Stage 2 — Export RAG spans from the previous 24 hours
-    export_rag_spans = ArizeAxSpansExportToParquetOperator(
-        task_id="export_rag_spans",
-        space_id="{{ var.value.get('arize_ax_space_id', None) }}",
-        project_name="{{ ti.xcom_pull(task_ids='extract_project_name') }}",
-        path=_TMP_PARQUET,
-        where=_RAG_SPAN_WHERE,
-        # Manual triggers leave data_interval_start == data_interval_end (both
-        # equal logical_date), and the SDK's exporter validates start < end
-        # strictly. Compute a 24h window off logical_date so manual triggers
-        # work; scheduled runs still see (close to) one schedule interval.
-        start_time="{{ (logical_date - macros.timedelta(hours=24)).isoformat() }}",
-        end_time="{{ logical_date.isoformat() }}",
-    )
-
-    check_has_spans = ShortCircuitOperator(
-        task_id="check_has_spans",
-        python_callable=_check_has_spans,
-    )
-
-    # Stage 3 — Build evaluation dataset
-    create_rag_eval_dataset = ArizeAxCreateDatasetOperator(
-        task_id="create_rag_eval_dataset",
-        space_id="{{ var.value.get('arize_ax_space_id', None) }}",
-        name="rag-eval-{{ ds }}",
-        # SDK 8.25+ rejects empty examples list at create time. Seed with a
-        # single placeholder; real RAG examples are appended by
-        # prepare_rag_examples once spans are exported.
-        examples=[{"input": "_seed_", "expected": "_seed_"}],
+    # ----- Phase 1: ephemeral RAG dataset ----------------------------------
+    create_rag_dataset = ArizeAxCreateDatasetOperator(
+        task_id="create_rag_dataset",
+        space_id=_SPACE_JINJA,
+        name=f"rag-eval-dataset-{_RUN_SUFFIX}",
+        examples=RAG_EVAL_EXAMPLES,
         if_exists="skip",
     )
 
-    prepare_rag_examples = PythonOperator(
-        task_id="prepare_rag_examples",
-        python_callable=_prepare_rag_examples,
+    # ----- Phase 2: two LLM-as-judges (faithfulness + context_relevance) ----
+    build_faithfulness_judge_config = PythonOperator(
+        task_id="build_faithfulness_judge_config",
+        python_callable=_build_judge_config(
+            "faithfulness", FAITHFULNESS_TEMPLATE,
+            {"faithful": 1.0, "hallucinated": 0.0},
+        ),
+    )
+    create_faithfulness_evaluator = ArizeAxCreateEvaluatorOperator(
+        task_id="create_faithfulness_evaluator",
+        space_id=_SPACE_JINJA,
+        name=f"rag_faithfulness_{_RUN_SUFFIX}",
+        evaluator_type="template",
+        commit_message="initial faithfulness judge",
+        template_config_task_id="build_faithfulness_judge_config",
+        description="LLM-as-judge for RAG response groundedness in context.",
+    )
+    create_faithfulness_eval_task = ArizeAxCreateTaskOperator(
+        task_id="create_faithfulness_eval_task",
+        name=f"rag-faithfulness-task-{_RUN_SUFFIX}",
+        eval_task_type="template_evaluation",
+        evaluators=[
+            {"evaluator_id": "{{ ti.xcom_pull(task_ids='create_faithfulness_evaluator') }}"},
+        ],
+        project_id="{{ var.value.get('arize_ax_project_id', '') or None }}",
+        is_continuous=False,
+        sampling_rate=1.0,
     )
 
-    append_rag_examples = ArizeAxAppendDatasetExamplesOperator(
-        task_id="append_rag_examples",
-        dataset_id="{{ ti.xcom_pull(task_ids='create_rag_eval_dataset') }}",
-        examples="{{ ti.xcom_pull(task_ids='prepare_rag_examples') }}",
+    build_relevance_judge_config = PythonOperator(
+        task_id="build_relevance_judge_config",
+        python_callable=_build_judge_config(
+            "context_relevance", CONTEXT_RELEVANCE_TEMPLATE,
+            {"relevant": 1.0, "irrelevant": 0.0},
+        ),
+    )
+    create_relevance_evaluator = ArizeAxCreateEvaluatorOperator(
+        task_id="create_relevance_evaluator",
+        space_id=_SPACE_JINJA,
+        name=f"rag_context_relevance_{_RUN_SUFFIX}",
+        evaluator_type="template",
+        commit_message="initial context_relevance judge",
+        template_config_task_id="build_relevance_judge_config",
+        description="LLM-as-judge for RAG retrieval-context relevance.",
+    )
+    create_relevance_eval_task = ArizeAxCreateTaskOperator(
+        task_id="create_relevance_eval_task",
+        name=f"rag-context-relevance-task-{_RUN_SUFFIX}",
+        eval_task_type="template_evaluation",
+        evaluators=[
+            {"evaluator_id": "{{ ti.xcom_pull(task_ids='create_relevance_evaluator') }}"},
+        ],
+        project_id="{{ var.value.get('arize_ax_project_id', '') or None }}",
+        is_continuous=False,
+        sampling_rate=1.0,
     )
 
-    # Stage 4 — Run evaluation experiments
-    run_faithfulness_eval = ArizeAxRunExperimentOperator(
-        task_id="run_faithfulness_eval",
-        name="rag-faithfulness-{{ ds }}",
-        dataset_id="{{ ti.xcom_pull(task_ids='create_rag_eval_dataset') }}",
-        task=_rag_task,
-        evaluators=[_faithfulness_evaluator],
-        concurrency=4,
+    # ----- Phase 3: RAG run_experiment task ---------------------------------
+    build_rag_run_config = PythonOperator(
+        task_id="build_rag_run_config",
+        python_callable=_build_rag_run_config,
+    )
+    create_rag_run_exp_task = ArizeAxCreateRunExperimentTaskOperator(
+        task_id="create_rag_run_exp_task",
+        space_id=_SPACE_JINJA,
+        name=f"rag-run-exp-task-{_RUN_SUFFIX}",
+        dataset_id="{{ ti.xcom_pull(task_ids='create_rag_dataset') }}",
+        run_configuration="{{ ti.xcom_pull(task_ids='build_rag_run_config') }}",
+        if_exists="skip",
     )
 
-    run_relevance_eval = ArizeAxRunExperimentOperator(
-        task_id="run_relevance_eval",
-        name="rag-relevance-{{ ds }}",
-        dataset_id="{{ ti.xcom_pull(task_ids='create_rag_eval_dataset') }}",
-        task=_rag_task,
-        evaluators=[_context_relevance_evaluator],
-        concurrency=4,
+    # ----- Phase 4: chained trigger + wait + get_result ---------------------
+    # Both judges fan out server-side after each row's LLM response is
+    # generated. Eval Hub executes them and writes per-row labels/scores
+    # into experiment_runs.additional_properties["eval.<name>.*"].
+    run_rag_experiment = arize_ax_chained_experiment_eval(
+        group_id="run_rag_experiment",
+        task_id_param="{{ ti.xcom_pull(task_ids='create_rag_run_exp_task') }}",
+        experiment_name=f"rag-eval-{_RUN_SUFFIX}",
+        space_id=_SPACE_JINJA,
+        evaluation_task_ids=[
+            "{{ ti.xcom_pull(task_ids='create_faithfulness_eval_task') }}",
+            "{{ ti.xcom_pull(task_ids='create_relevance_eval_task') }}",
+        ],
+        wait_for_completion=True,
+        sensor_timeout=900,
+        sensor_poke_interval=15,
+        fail_on_run_error=True,
     )
 
-    # Stage 5 — Score experiments
+    # ----- Phase 5: score both metrics --------------------------------------
+    _RAG_EXP_ID = (
+        "{{ ti.xcom_pull(task_ids='run_rag_experiment.trigger', "
+        "key='result')['experiment_id'] }}"
+    )
     score_faithfulness = ArizeAxGetExperimentScoreOperator(
         task_id="score_faithfulness",
-        experiment_id="{{ ti.xcom_pull(task_ids='run_faithfulness_eval') }}",
+        experiment_id=_RAG_EXP_ID,
+        aggregation="mean",
+    )
+    score_context_relevance = ArizeAxGetExperimentScoreOperator(
+        task_id="score_context_relevance",
+        experiment_id=_RAG_EXP_ID,
         aggregation="mean",
     )
 
-    score_relevance = ArizeAxGetExperimentScoreOperator(
-        task_id="score_relevance",
-        experiment_id="{{ ti.xcom_pull(task_ids='run_relevance_eval') }}",
-        aggregation="mean",
-    )
-
-    # Stage 6 — Report
+    # ----- Phase 6: report --------------------------------------------------
     report_rag_quality = PythonOperator(
         task_id="report_rag_quality",
         python_callable=_report_rag_quality,
         trigger_rule="all_done",
     )
 
+    # ----- Phase 7: cleanup -------------------------------------------------
+    cleanup_faithfulness_eval_task = ArizeAxDeleteTaskOperator(
+        task_id="cleanup_faithfulness_eval_task",
+        task_id_param="{{ ti.xcom_pull(task_ids='create_faithfulness_eval_task') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+    cleanup_relevance_eval_task = ArizeAxDeleteTaskOperator(
+        task_id="cleanup_relevance_eval_task",
+        task_id_param="{{ ti.xcom_pull(task_ids='create_relevance_eval_task') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+    cleanup_rag_run_exp_task = ArizeAxDeleteTaskOperator(
+        task_id="cleanup_rag_run_exp_task",
+        task_id_param="{{ ti.xcom_pull(task_ids='create_rag_run_exp_task') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+    cleanup_faithfulness_evaluator = ArizeAxDeleteEvaluatorOperator(
+        task_id="cleanup_faithfulness_evaluator",
+        evaluator_id="{{ ti.xcom_pull(task_ids='create_faithfulness_evaluator') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+    cleanup_relevance_evaluator = ArizeAxDeleteEvaluatorOperator(
+        task_id="cleanup_relevance_evaluator",
+        evaluator_id="{{ ti.xcom_pull(task_ids='create_relevance_evaluator') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+    cleanup_dataset = ArizeAxDeleteDatasetOperator(
+        task_id="cleanup_dataset",
+        dataset_id="{{ ti.xcom_pull(task_ids='create_rag_dataset') }}",
+        ignore_if_missing=True,
+        trigger_rule="all_done",
+    )
+
     # Wiring
-    check_project_exists >> extract_project_name >> export_rag_spans >> check_has_spans
-
-    check_has_spans >> create_rag_eval_dataset >> prepare_rag_examples >> append_rag_examples
-
-    append_rag_examples >> [run_faithfulness_eval, run_relevance_eval]
-
-    run_faithfulness_eval >> score_faithfulness
-    run_relevance_eval >> score_relevance
-
-    [score_faithfulness, score_relevance] >> report_rag_quality
+    check_prereqs >> [
+        create_rag_dataset,
+        build_faithfulness_judge_config,
+        build_relevance_judge_config,
+        build_rag_run_config,
+    ]
+    build_faithfulness_judge_config >> create_faithfulness_evaluator >> create_faithfulness_eval_task
+    build_relevance_judge_config >> create_relevance_evaluator >> create_relevance_eval_task
+    [create_rag_dataset, build_rag_run_config] >> create_rag_run_exp_task
+    [
+        create_rag_run_exp_task,
+        create_faithfulness_eval_task,
+        create_relevance_eval_task,
+    ] >> run_rag_experiment
+    run_rag_experiment >> [score_faithfulness, score_context_relevance] >> report_rag_quality
+    report_rag_quality >> [
+        cleanup_faithfulness_eval_task,
+        cleanup_relevance_eval_task,
+        cleanup_rag_run_exp_task,
+        cleanup_faithfulness_evaluator,
+        cleanup_relevance_evaluator,
+        cleanup_dataset,
+    ]
