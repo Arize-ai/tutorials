@@ -72,12 +72,10 @@ Optional Variables
   uses ``gpt-4o`` regardless.
 
 This demo runs **client-side experiments** via ``ArizeAxRunExperimentOperator``.
-Server-side (Eval Hub) execution would be cleaner but requires a separate
-``template_evaluation`` task chain per experiment because
-``LlmGenerationRunConfig`` does not accept ``evaluator_ids`` today (filed
-upstream as `Arize-ai/arize#72271 <https://github.com/Arize-ai/arize/issues/72271>`_).
-When that ships, this DAG can collapse the worker-side LLM calls in favor
-of the Eval Hub task chain.
+For a server-side (Eval Hub) variant, see ``example_arize_ax_e2e_dag.py``,
+which uses the ``arize_ax_chained_experiment_eval`` TaskGroup helper to
+trigger a ``run_experiment`` task with chained evaluation tasks via
+``evaluation_task_ids``.
 """
 
 from __future__ import annotations
