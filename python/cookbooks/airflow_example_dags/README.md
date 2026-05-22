@@ -1,10 +1,10 @@
 # Arize AX Airflow Example DAGs
 
-A collection of 21 example DAGs demonstrating the [`arize-ax-airflow-provider`](https://github.com/Arize-ai/arize-ax-airflow) — the official Apache Airflow provider for [Arize AX](https://arize.com/docs/ax/).
+A collection of 22 example DAGs demonstrating the [`arize-ax-airflow-provider`](https://github.com/Arize-ai/arize-ax-airflow) — the official Apache Airflow provider for [Arize AX](https://arize.com/docs/ax/).
 
-Each DAG illustrates a real LLMOps workflow you can adapt for your own pipelines: CI/CD evaluation gates, prompt lifecycle management, drift detection with auto-rollback, RAG evaluation, dataset curation from production traces, fine-tuning data pipelines, behavioral regression checks, evaluator calibration, self-optimizing prompt loops, and more.
+Each DAG illustrates a real LLMOps workflow you can adapt for your own pipelines: CI/CD evaluation gates, prompt lifecycle management, drift detection with auto-rollback, RAG evaluation, dataset curation from production traces, fine-tuning data pipelines, behavioral regression checks, evaluator calibration, self-optimizing prompt loops, cloud-storage round-trips, and more.
 
-> **Last Updated:** 2026-05-18
+> **Last Updated:** 2026-05-21
 
 ---
 
@@ -72,9 +72,13 @@ The DAGs read configuration from Airflow Variables so you can run them without e
 
 ### Common (used by most DAGs)
 
+Most DAGs run their evaluation tasks via **Arize Eval Hub** (server-side execution) rather than calling LLMs from Airflow workers. That means you'll typically need a configured AI Integration in Arize and a project to scope the eval tasks to:
+
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
 | `arize_ax_space_id` | If not set in connection Extra | — | Target Arize space (global ID or name) |
+| `arize_ai_integration_id` (or env var `ARIZE_AI_INTEGRATION_ID`) | ✅ for any DAG running Eval Hub tasks | — | UUID of an AI Integration in Arize (Settings → AI Integrations) configured with a real provider API key. Used by `experiment_dag`, `llm_cicd_gate_dag`, `llm_experiments_dag`, `prompt_lifecycle_dag`, `drift_detection_dag`, `rag_evaluation_dag`, `self_optimizing_loop_dag`, `tasks_dag`, `evaluators_dag` |
+| `arize_ax_project_id` | ✅ for any DAG running Eval Hub tasks | — | Project ID used to scope evaluation tasks. Required by the same DAGs as `arize_ai_integration_id` above |
 
 ### Per-DAG
 
@@ -83,19 +87,15 @@ The DAGs read configuration from Airflow Variables so you can run them without e
 | `annotation_queues_dag` | `arize_annotator_email` | ✅ | Comma-separated reviewer email(s), e.g. `alice@example.com,bob@example.com` |
 | `annotation_queues_dag` | `arize_queue_name` | optional | Demo queue name (default: `airflow-demo-queue`) |
 | `dataset_curation_dag` | `arize_ax_dataset_id` | ✅ | Target dataset to append curated examples to |
-| `drift_detection_dag` | `arize_ax_baseline_experiment_id` | ✅ | Baseline experiment for drift comparison |
-| `drift_detection_dag` | `arize_ax_candidate_experiment_id` | ✅ | Candidate experiment for drift comparison |
-| `llm_cicd_gate_dag` | `arize_ax_baseline_experiment_id` | ✅ | Baseline to gate releases against |
-| `llm_cicd_gate_dag` | `arize_ax_prompt_name` | optional | Prompt to promote on gate-pass; unset = gate-only mode (no promotion) |
-| `llm_cicd_gate_dag` | `arize_ax_prompt_label` | optional | Label applied to the promoted prompt version (default: `production`) |
-| `prompt_lifecycle_dag` | `arize_ax_prompt_name` | ✅ | Prompt to promote staging → production |
 | `prompt_ab_test_dag` | `arize_ax_prompt_names` | optional | JSON list or CSV of prompt names to compare |
 | `prompt_optimization_with_feedback_dag` | `arize_ax_lookback_days` | optional | Days of production feedback to learn from |
-| `tasks_dag` / `evaluators_dag` | `ARIZE_AI_INTEGRATION_ID`, `ARIZE_EVALUATOR_MODEL` | ✅ | OpenAI/Anthropic integration UUID + model name for LLM-as-judge |
-| `e2e_dag` | `arize_ai_integration_id` | optional | Enables LLM evaluator + task lifecycle phases (skipped when unset) |
+| `tasks_dag` / `evaluators_dag` | `ARIZE_EVALUATOR_MODEL` | ✅ | Model name used by the LLM-as-judge (e.g. `gpt-4o`, `claude-sonnet-4-5`) |
 | `e2e_dag` | `arize_annotator_email` | optional | Enables the annotation-queue lifecycle phase |
 | `self_optimizing_loop_dag` | `arize_ax_self_optimizing_model` | optional | OpenAI model used by experiment tasks (default `gpt-4o-mini`) |
 | `self_optimizing_loop_dag` | `arize_ax_self_optimizing_cleanup` | optional | Set to `"true"` to delete the demo dataset on DAG completion (default `"false"`) |
+| `cloud_export_dag` | `arize_ax_project_name` | ✅ | Name of the Arize project to export spans from (project name, not base64 ID) |
+| `cloud_export_dag` | `arize_ax_cloud_target_prefix` | ✅ | Scheme + bucket / container, e.g. `s3://demo-bucket`, `gs://demo-bucket`, `abfs://demo-container` |
+| `cloud_export_dag` | `arize_ax_cloud_storage_options` | ✅ | JSON dict of credentials / endpoint overrides for the target backend (AWS keys, MinIO endpoint, GCS service-account path, Azure account key) |
 
 The required values are documented in each DAG's module docstring — open the file and check the `**Required**` / `**Optional Airflow Variables**` sections.
 
@@ -115,7 +115,7 @@ Or symlink the directory so updates propagate:
 ln -s "$(pwd)/python/cookbooks/airflow_example_dags" $AIRFLOW_HOME/dags/arize_ax_examples
 ```
 
-Refresh the Airflow UI — all 21 DAGs should appear under the `arize_ax` tag.
+Refresh the Airflow UI — all 22 DAGs should appear under the `arize_ax` tag.
 
 ---
 
@@ -150,6 +150,7 @@ From there, work up to the workflow that matches your use case. The table below 
 | Self-learning prompt optimization | `example_arize_ax_prompt_optimization_with_feedback_dag.py` |
 | Self-optimizing prompt loop (baseline → optimize → gate → promote) | `example_arize_ax_self_optimizing_loop_dag.py` |
 | End-to-end provider smoke test (~70 operators, 7 sensors) | `example_arize_ax_e2e_dag.py` |
+| Cloud-storage round-trip (spans → S3/GCS/ABFS → dataset) | `example_arize_ax_cloud_export_dag.py` |
 | Inventory / admin (list spaces, projects) | `example_arize_ax_admin_dag.py` |
 | Span export & metrics | `example_arize_ax_spans_dag.py` |
 | Custom evaluator creation | `example_arize_ax_evaluators_dag.py` |
