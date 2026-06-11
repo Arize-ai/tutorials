@@ -29,8 +29,11 @@ const provider = new NodeTracerProvider({
     // you may try SimpleSpanProcessor for instant span flushing to the Phoenix UI.
     new BatchSpanProcessor(
       new OTLPTraceExporter({
-        url: "https://app.phoenix.arize.com/v1/traces",
-        headers: { "api_key": process.env.PHOENIX_API_KEY || "" },
+        // PHOENIX_COLLECTOR_ENDPOINT is the workspace base URL, e.g.
+        // https://app.phoenix.arize.com/s/<workspace> for Phoenix Cloud
+        // or http://localhost:6006 for self-hosted Phoenix.
+        url: `${process.env.PHOENIX_COLLECTOR_ENDPOINT ?? "http://localhost:6006"}/v1/traces`,
+        headers: { authorization: `Bearer ${process.env.PHOENIX_API_KEY ?? ""}` },
       })
     ),
   ],
