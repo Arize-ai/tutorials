@@ -1,0 +1,87 @@
+{
+  "_comment": "Single source of truth for the check-models skill. Update the numbers in `openai` and `anthropic` whenever a new model ships, then re-run the scanner. The scanner derives the full replacement table from these policy values — you should not need to enumerate every old ID.",
+  "updated": "2026-06-17",
+  "verifiedBy": "WebSearch (OpenAI + Anthropic) + claude-api skill shared/models.md",
+
+  "openai": {
+    "flagship": "gpt-5.5",
+    "pro": "gpt-5.5-pro",
+    "mini": "gpt-5.4-mini",
+    "nano": "gpt-5.4-nano",
+    "flagshipMinVersion": 5.5,
+    "proMinVersion": 5.5,
+    "miniMinVersion": 5.4,
+    "nanoMinVersion": 5.4,
+    "notes": "GPT-5.5 is the latest flagship (released 2026-04-23, API id gpt-5.5-2026-04-23) and has no mini/nano variant — mini/nano stay on the 5.4 generation. Match the SIZE tier: a *-mini model migrates to the latest mini, never the flagship. The GPT-5 family are REASONING models — they reject temperature/top_p (see codeChanges). For temperature-dependent code use the nonReasoning tier below.",
+    "nonReasoning": {
+      "flagship": "gpt-4.1",
+      "mini": "gpt-4.1-mini",
+      "nano": "gpt-4.1-nano",
+      "note": "Latest NON-reasoning OpenAI models — active (NOT deprecated, per https://developers.openai.com/api/docs/deprecations checked 2026-06-17) and they ACCEPT temperature/top_p. Use these (not GPT-5) for code that needs temperature control — LLM-as-judge evaluators, deterministic extraction/classification at temperature 0. gpt-4o / gpt-4o-mini are also non-reasoning + active but older; gpt-4.1 supersedes them.",
+      "treatAsCurrent": true
+    },
+    "deprecatedOpenAI": ["gpt-3.5-turbo (snapshots; shutdown 2026-10-23)", "o1", "o1-mini", "o1-preview", "o3-mini", "o4-mini", "gpt-5 / gpt-5-mini legacy snapshots (shutdown 2026-12-11)", "gpt-5.2-chat-latest (2026-08-10)"]
+  },
+
+  "anthropic": {
+    "opus": "claude-opus-4-8",
+    "sonnet": "claude-sonnet-4-6",
+    "haiku": "claude-haiku-4-5",
+    "notes": "Opus 4.8 / Sonnet 4.6 / Haiku 4.5 are the current GA tiers. Claude Fable 5 and Claude Mythos 5 exist but were export-control-suspended on 2026-06-12 — NEVER migrate to them. Match the SIZE tier (opus/sonnet/haiku)."
+  },
+
+  "codeChanges": {
+    "_comment": "Reasoning-model (GPT-5 / o-series) parameter migrations. The scanner flags these; the skill applies them.",
+    "renames": [
+      { "from": "max_tokens", "to": "max_completion_tokens", "scope": "openai-reasoning", "note": "GPT-5 and o-series reject max_tokens in Chat Completions; use max_completion_tokens." }
+    ],
+    "removeForReasoning": [
+      "temperature", "top_p", "presence_penalty", "frequency_penalty",
+      "logprobs", "top_logprobs", "logit_bias"
+    ],
+    "removeNote": "GPT-5 / o-series reasoning models reject these sampling params (temperature must be the default 1 if sent). Remove them; steer with `reasoning_effort` (low|medium|high) and `verbosity` (low|medium|high) instead.",
+    "anthropicNote": "Anthropic Opus 4.8/4.7 reject temperature/top_p/top_k and budget_tokens (use thinking:{type:'adaptive'} + effort). See the claude-api skill `shared/model-migration.md` for full Claude code changes."
+  },
+
+  "review": {
+    "_comment": "Tokens that look like model IDs but need a human decision — the scanner flags them (severity: warn) and never auto-rewrites them.",
+    "openaiPatterns": [
+      "codex", "chat-latest", "realtime", "audio", "search", "transcribe",
+      "image", "tts", "whisper", "embedding", "moderation", "instruct"
+    ],
+    "openaiExact": ["gpt-4v"]
+  },
+
+  "ignore": {
+    "_comment": "Known NON-model tokens that share the model prefix. The scanner never reports these.",
+    "openai": ["gpt-oss-20b", "gpt-oss-120b", "gpt-oss"],
+    "openaiPatterns": ["oss", "\\.png", "\\.jpg", "\\.jpeg", "\\.gif", "\\.svg"],
+    "anthropic": [
+      "claude-code", "claude-code-tracing", "claude-agent-sdk", "claude-web",
+      "claude-user", "claude-searchbot", "claude-powered", "claude-trace",
+      "claude-session", "claude-fable-5", "claude-mythos-5"
+    ],
+    "anthropicPatterns": [
+      "^claude-code", "^claude-md", "searchbot", "-bot$", "\\.png", "\\.jpg",
+      "\\.jpeg", "\\.gif", "\\.svg", "\\.log", "fable", "mythos", "-powered"
+    ]
+  },
+
+  "excludePaths": [
+    "**/release-notes/**",
+    "**/changelog/**",
+    "**/*release-note*",
+    "**/*-releases.*",
+    "**/on-premise-releases*",
+    "**/*changelog*",
+    "**/*migration*",
+    "**/*migrate*",
+    "**/api-clients/**",
+    "**/.agents/skills/check-models/**",
+    "**/node_modules/**",
+    "**/.git/**",
+    "**/.venv/**"
+  ],
+
+  "scanExtensions": [".mdx", ".md", ".ipynb", ".py", ".ts", ".tsx", ".js", ".jsx"]
+}

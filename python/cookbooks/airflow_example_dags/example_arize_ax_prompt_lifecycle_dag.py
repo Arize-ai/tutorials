@@ -54,7 +54,7 @@ Variables
 - ``arize_ax_space_id`` — Arize space ID (required).
 - ``arize_ax_project_id`` — project ID used to scope the accuracy eval task.
 - ``arize_ai_integration_id`` *or* env var ``ARIZE_AI_INTEGRATION_ID`` —
-  OpenAI integration in Arize with gpt-4.1 access.
+  OpenAI integration in Arize with gpt-5.5 access.
 
 Constants:
 - ``STAGING_THRESHOLD`` — minimum staging accuracy to pass the staging
@@ -157,8 +157,8 @@ def _build_accuracy_judge_config(**_ctx) -> dict[str, Any]:
         "classification_choices": {"correct": 1.0, "incorrect": 0.0},
         "llm_config": {
             "ai_integration_id": _resolve_integration_id(),
-            "model_name": "gpt-4o-mini",
-            "invocation_parameters": {"temperature": 0},
+            "model_name": "gpt-5.4-mini",
+            "invocation_parameters": {},
             "provider_parameters": {},
         },
     }
@@ -176,7 +176,7 @@ def _build_run_config(model: str, system_prompt: str):
                 {"role": "user", "content": "{{query}}"},
             ],
             "input_variable_format": "mustache",
-            "invocation_parameters": {"temperature": 0},
+            "invocation_parameters": {},
             "provider_parameters": {},
         }
 
@@ -302,7 +302,7 @@ with DAG(
             {"role": "system", "content": PRODUCTION_SYSTEM_PROMPT},
             {"role": "user", "content": "{query}"},
         ],
-        model="gpt-4.1",
+        model="gpt-5.5",
         commit_message="initial lifecycle prompt version",
         input_variable_format="f_string",
     )
@@ -310,7 +310,7 @@ with DAG(
     # ----- Phase 4: staging experiment (baseline-quality prompt) ------------
     build_staging_run_config = PythonOperator(
         task_id="build_staging_run_config",
-        python_callable=_build_run_config("gpt-4.1", STAGING_SYSTEM_PROMPT),
+        python_callable=_build_run_config("gpt-5.5", STAGING_SYSTEM_PROMPT),
     )
     create_staging_run_exp_task = ArizeAxCreateRunExperimentTaskOperator(
         task_id="create_staging_run_exp_task",
@@ -358,7 +358,7 @@ with DAG(
     # we observed under parallel fan-out.
     build_production_run_config = PythonOperator(
         task_id="build_production_run_config",
-        python_callable=_build_run_config("gpt-4.1", PRODUCTION_SYSTEM_PROMPT),
+        python_callable=_build_run_config("gpt-5.5", PRODUCTION_SYSTEM_PROMPT),
     )
     create_production_run_exp_task = ArizeAxCreateRunExperimentTaskOperator(
         task_id="create_production_run_exp_task",

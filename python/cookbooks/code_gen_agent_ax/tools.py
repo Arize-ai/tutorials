@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 
 
 def initialize_tool_llm(model, api_key):
-    tool_model = ChatOpenAI(model=model, api_key=api_key, temperature=0.7)
+    tool_model = ChatOpenAI(model=model, api_key=api_key)
     return tool_model
 
 

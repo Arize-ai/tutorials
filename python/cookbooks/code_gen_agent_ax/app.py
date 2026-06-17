@@ -25,8 +25,8 @@ def initialize_agent(arize_api_key, arize_space_id, project_name, openai_key, us
     os.environ["ARIZE_SPACE_ID"] = arize_space_id
     os.environ["OPENAI_API_KEY"] = openai_key
     agent_tracer = initialize_instrumentor(project_name, arize_space_id, arize_api_key)
-    agent_ai_llm = initialize_llm("gpt-4o", openai_key)
-    tool_model = initialize_tool_llm("gpt-4o", openai_key)
+    agent_ai_llm = initialize_llm("gpt-5.5", openai_key)
+    tool_model = initialize_tool_llm("gpt-5.5", openai_key)
     copilot_agent = construct_agent()
     return (
         copilot_agent,

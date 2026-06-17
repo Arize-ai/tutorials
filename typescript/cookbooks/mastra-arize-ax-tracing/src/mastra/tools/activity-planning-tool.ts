@@ -18,7 +18,7 @@ export const activityPlanningTool = createTool({
     const { weatherData, weatherAnalysis, location } = context;
 
     const result = await generateText({
-      model: openai('gpt-4o-mini'),
+      model: openai('gpt-5.4-mini'),
       prompt: `Based on the weather data${weatherAnalysis ? ' and analysis' : ''} for ${location}, create a detailed activity plan:
 
 WEATHER DATA:

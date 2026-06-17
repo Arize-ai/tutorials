@@ -9,9 +9,9 @@ Experiment matrix
 +---+--------------+-----------+--------------------------------------+
 | # | Model        | Prompt    | Purpose                              |
 +---+--------------+-----------+--------------------------------------+
-| 1 | gpt-4o-mini  | concise   | Baseline: cheap model, simple prompt |
-| 2 | gpt-4.1      | concise   | Better model, same prompt            |
-| 3 | gpt-4o-mini  | detailed  | Same cheap model, better prompt      |
+| 1 | gpt-5.4-mini | concise   | Baseline: cheap model, simple prompt |
+| 2 | gpt-5.5      | concise   | Better model, same prompt            |
+| 3 | gpt-5.4-mini | detailed  | Same cheap model, better prompt      |
 +---+--------------+-----------+--------------------------------------+
 
 Comparing (1 vs 2): model quality impact (holding prompt constant)
@@ -111,9 +111,9 @@ PROMPT_DETAILED = (
 # (name, model, system_prompt) — single-provider (OpenAI) to keep the demo
 # runnable on a single AI integration.
 EXPERIMENT_CONFIGS: list[dict[str, str]] = [
-    {"name": "gpt4omini-concise",  "model": "gpt-4o-mini", "prompt": PROMPT_CONCISE},
-    {"name": "gpt41-concise",      "model": "gpt-4.1",     "prompt": PROMPT_CONCISE},
-    {"name": "gpt4omini-detailed", "model": "gpt-4o-mini", "prompt": PROMPT_DETAILED},
+    {"name": "gpt54mini-concise",  "model": "gpt-5.4-mini", "prompt": PROMPT_CONCISE},
+    {"name": "gpt55-concise",      "model": "gpt-5.5",      "prompt": PROMPT_CONCISE},
+    {"name": "gpt54mini-detailed", "model": "gpt-5.4-mini", "prompt": PROMPT_DETAILED},
 ]
 
 DATASET_EXAMPLES = [
@@ -183,8 +183,8 @@ def _build_judge_template_config(name: str, template: str, choices: dict[str, fl
             "classification_choices": choices,
             "llm_config": {
                 "ai_integration_id": integration_id,
-                "model_name": "gpt-4o-mini",
-                "invocation_parameters": {"temperature": 0},
+                "model_name": "gpt-5.4-mini",
+                "invocation_parameters": {},
                 "provider_parameters": {},
             },
         }
@@ -210,7 +210,7 @@ def _build_run_config(model: str, system_prompt: str):
                 {"role": "user", "content": "{{query}}"},
             ],
             "input_variable_format": "mustache",
-            "invocation_parameters": {"temperature": 0},
+            "invocation_parameters": {},
             "provider_parameters": {},
         }
 

@@ -89,9 +89,9 @@ Most DAGs run their evaluation tasks via **Arize Eval Hub** (server-side executi
 | `dataset_curation_dag` | `arize_ax_dataset_id` | ✅ | Target dataset to append curated examples to |
 | `prompt_ab_test_dag` | `arize_ax_prompt_names` | optional | JSON list or CSV of prompt names to compare |
 | `prompt_optimization_with_feedback_dag` | `arize_ax_lookback_days` | optional | Days of production feedback to learn from |
-| `tasks_dag` / `evaluators_dag` | `ARIZE_EVALUATOR_MODEL` | ✅ | Model name used by the LLM-as-judge (e.g. `gpt-4o`, `claude-sonnet-4-5`) |
+| `tasks_dag` / `evaluators_dag` | `ARIZE_EVALUATOR_MODEL` | ✅ | Model name used by the LLM-as-judge (e.g. `gpt-5.5`, `claude-sonnet-4-6`) |
 | `e2e_dag` | `arize_annotator_email` | optional | Enables the annotation-queue lifecycle phase |
-| `self_optimizing_loop_dag` | `arize_ax_self_optimizing_model` | optional | OpenAI model used by experiment tasks (default `gpt-4o-mini`) |
+| `self_optimizing_loop_dag` | `arize_ax_self_optimizing_model` | optional | OpenAI model used by experiment tasks (default `gpt-5.4-mini`) |
 | `self_optimizing_loop_dag` | `arize_ax_self_optimizing_cleanup` | optional | Set to `"true"` to delete the demo dataset on DAG completion (default `"false"`) |
 | `cloud_export_dag` | `arize_ax_project_name` | ✅ | Name of the Arize project to export spans from (project name, not base64 ID) |
 | `cloud_export_dag` | `arize_ax_cloud_target_prefix` | ✅ | Scheme + bucket / container, e.g. `s3://demo-bucket`, `gs://demo-bucket`, `abfs://demo-container` |

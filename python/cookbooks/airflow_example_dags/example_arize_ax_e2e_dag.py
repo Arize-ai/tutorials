@@ -348,10 +348,10 @@ def _build_run_configuration(integration_id: str | None = None, **ctx) -> dict[s
     return {
         "experiment_type": "llm_generation",
         "ai_integration_id": integration_id,
-        "model_name": "gpt-4o-mini",
+        "model_name": "gpt-5.4-mini",
         "messages": [{"role": "user", "content": "Echo: {{query}}"}],
         "input_variable_format": "mustache",
-        "invocation_parameters": {"temperature": 0},
+        "invocation_parameters": {},
         "provider_parameters": {},
     }
 
@@ -383,8 +383,8 @@ def _build_evaluator_template_config(**ctx) -> dict[str, Any]:
         "classification_choices": {"incorrect": 0, "correct": 1},
         "llm_config": {
             "ai_integration_id": integration_id,
-            "model_name": "gpt-4o-mini",
-            "invocation_parameters": {"temperature": 0},
+            "model_name": "gpt-5.4-mini",
+            "invocation_parameters": {},
             "provider_parameters": {},
         },
     }
@@ -1236,7 +1236,7 @@ with DAG(
         ],
         provider="open_ai",
         input_variable_format="f_string",
-        model="gpt-4o-mini",
+        model="gpt-5.4-mini",
         commit_message="Initial version from e2e run {{ ts_nodash }}",
         if_exists="skip",
     )

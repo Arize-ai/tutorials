@@ -49,7 +49,7 @@ Variables
 - ``arize_ax_space_id`` — Arize space ID (required).
 - ``arize_ax_project_id`` — project ID used to scope the accuracy eval task.
 - ``arize_ai_integration_id`` *or* env var ``ARIZE_AI_INTEGRATION_ID`` —
-  OpenAI integration in Arize with gpt-4.1 access.
+  OpenAI integration in Arize with gpt-5.5 access.
 
 Constants:
 - ``DRIFT_THRESHOLD`` — absolute score drop that triggers rollback
@@ -151,8 +151,8 @@ def _build_accuracy_judge_config(**_ctx) -> dict[str, Any]:
         "classification_choices": {"correct": 1.0, "incorrect": 0.0},
         "llm_config": {
             "ai_integration_id": _resolve_integration_id(),
-            "model_name": "gpt-4o-mini",
-            "invocation_parameters": {"temperature": 0},
+            "model_name": "gpt-5.4-mini",
+            "invocation_parameters": {},
             "provider_parameters": {},
         },
     }
@@ -170,7 +170,7 @@ def _build_run_config(model: str, system_prompt: str):
                 {"role": "user", "content": "{{query}}"},
             ],
             "input_variable_format": "mustache",
-            "invocation_parameters": {"temperature": 0},
+            "invocation_parameters": {},
             "provider_parameters": {},
         }
 
@@ -250,7 +250,7 @@ with DAG(
             {"role": "system", "content": BASELINE_SYSTEM_PROMPT},
             {"role": "user", "content": "{query}"},
         ],
-        model="gpt-4.1",
+        model="gpt-5.5",
         commit_message="known-stable prompt version (rollback target)",
         input_variable_format="f_string",
     )
@@ -258,7 +258,7 @@ with DAG(
     # ----- Phase 4: baseline experiment (good config) -----------------------
     build_baseline_run_config = PythonOperator(
         task_id="build_baseline_run_config",
-        python_callable=_build_run_config("gpt-4.1", BASELINE_SYSTEM_PROMPT),
+        python_callable=_build_run_config("gpt-5.5", BASELINE_SYSTEM_PROMPT),
     )
     create_baseline_run_exp_task = ArizeAxCreateRunExperimentTaskOperator(
         task_id="create_baseline_run_exp_task",
@@ -285,7 +285,7 @@ with DAG(
     # ----- Phase 5: current (deliberately degraded) experiment --------------
     build_current_run_config = PythonOperator(
         task_id="build_current_run_config",
-        python_callable=_build_run_config("gpt-4.1", CURRENT_SYSTEM_PROMPT),
+        python_callable=_build_run_config("gpt-5.5", CURRENT_SYSTEM_PROMPT),
     )
     create_current_run_exp_task = ArizeAxCreateRunExperimentTaskOperator(
         task_id="create_current_run_exp_task",

@@ -68,7 +68,7 @@ from airflow.providers.arize_ax.operators.spans import (
     ArizeAxCurateFeedbackDatasetOperator,
 )
 
-OPTIMIZATION_MODEL = "gpt-4o"
+OPTIMIZATION_MODEL = "gpt-5.5"
 
 
 def _build_create_prompt_kwargs(result: dict[str, Any]) -> dict[str, Any]:

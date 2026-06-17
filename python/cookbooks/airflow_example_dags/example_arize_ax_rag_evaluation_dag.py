@@ -5,7 +5,7 @@ faithfulness and context-relevance scoring for a context-augmented LLM.
 This DAG demonstrates RAG-style evaluation end-to-end without depending on
 any production span pipeline. It builds a small synthetic dataset of
 ``(query, context, expected_output)`` rows, registers a server-side
-``run_experiment`` task that drives a context-aware ``gpt-4.1`` LLM call,
+``run_experiment`` task that drives a context-aware ``gpt-5.5`` LLM call,
 and chains two ``template_evaluation`` LLM-as-judges that run server-side
 after each row's LLM response is produced:
 
@@ -49,7 +49,7 @@ Variables
 - ``arize_ax_space_id`` — Arize space ID (required).
 - ``arize_ax_project_id`` — project ID used to scope the eval tasks.
 - ``arize_ai_integration_id`` *or* env var ``ARIZE_AI_INTEGRATION_ID`` —
-  OpenAI integration in Arize with gpt-4.1 access.
+  OpenAI integration in Arize with gpt-5.5 access.
 """
 
 from __future__ import annotations
@@ -195,8 +195,8 @@ def _build_judge_config(name: str, template: str, choices: dict[str, float]):
             "classification_choices": choices,
             "llm_config": {
                 "ai_integration_id": _resolve_integration_id(),
-                "model_name": "gpt-4o-mini",
-                "invocation_parameters": {"temperature": 0},
+                "model_name": "gpt-5.4-mini",
+                "invocation_parameters": {},
                 "provider_parameters": {},
             },
         }
@@ -209,13 +209,13 @@ def _build_rag_run_config(**_ctx) -> dict[str, Any]:
     return {
         "experiment_type": "llm_generation",
         "ai_integration_id": _resolve_integration_id(),
-        "model_name": "gpt-4.1",
+        "model_name": "gpt-5.5",
         "messages": [
             {"role": "system", "content": RAG_SYSTEM_PROMPT},
             {"role": "user", "content": RAG_USER_TEMPLATE},
         ],
         "input_variable_format": "mustache",
-        "invocation_parameters": {"temperature": 0},
+        "invocation_parameters": {},
         "provider_parameters": {},
     }
 

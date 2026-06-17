@@ -94,12 +94,12 @@ def _build_baseline_run_config(**_ctx) -> dict[str, Any]:
     return {
         "experiment_type": "llm_generation",
         "ai_integration_id": _get_ai_integration_id(),
-        "model_name": "gpt-4o-mini",
+        "model_name": "gpt-5.4-mini",
         "messages": [
             {"role": "user", "content": "Answer in as few words as possible: {{input}}"},
         ],
         "input_variable_format": "mustache",
-        "invocation_parameters": {"temperature": 0},
+        "invocation_parameters": {},
         "provider_parameters": {},
     }
 

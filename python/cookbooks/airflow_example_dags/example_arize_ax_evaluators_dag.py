@@ -25,7 +25,7 @@ Requires:
 - For the mutation chain: **AI integration global ID** — set either
   ``ARIZE_AI_INTEGRATION_ID`` in the **worker environment** (Docker/Kubernetes) **or**
   an Airflow **Variable** with key ``ARIZE_AI_INTEGRATION_ID`` (Admin → Variables).
-  Optional model: env or Variable ``ARIZE_EVALUATOR_MODEL`` (default ``gpt-4o-mini``).
+  Optional model: env or Variable ``ARIZE_EVALUATOR_MODEL`` (default ``gpt-5.4-mini``).
 
 The Evaluators REST API is **alpha**. See:
 https://arize.com/docs/api-reference/evaluators/list-evaluators
@@ -65,8 +65,8 @@ def _get_evaluator_model() -> str:
     if v:
         return v
     return (
-        Variable.get("ARIZE_EVALUATOR_MODEL", default_var="gpt-4o-mini").strip()
-        or "gpt-4o-mini"
+        Variable.get("ARIZE_EVALUATOR_MODEL", default_var="gpt-5.4-mini").strip()
+        or "gpt-5.4-mini"
     )
 
 
@@ -98,7 +98,7 @@ def _build_evaluator_template_config_v1(**_context: Any) -> dict[str, Any]:
             "llm_config": {
                 "ai_integration_id": integration_id,
                 "model_name": model,
-                "invocation_parameters": {"temperature": 0},
+                "invocation_parameters": {},
                 "provider_parameters": {},
             },
         },
