@@ -1,0 +1,6 @@
+{
+  "env": {
+    "ARIZE_TRACE_ENABLED": "true",
+    "ARIZE_PROJECT_NAME": "claude-code"
+  }
+}
