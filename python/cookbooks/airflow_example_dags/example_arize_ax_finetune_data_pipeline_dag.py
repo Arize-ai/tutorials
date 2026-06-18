@@ -158,7 +158,7 @@ def _notify_ready(**ctx) -> dict[str, Any]:
     print(f"  Examples      : {count}")
     print(f"  Arize dataset : {ds_id}")
     print("  Next step     : trigger OpenAI fine-tune job (not implemented).")
-    print("  Example CLI   : openai api fine_tuning.jobs.create -t <file_id> -m gpt-5.4-mini")
+    print("  Example CLI   : openai api fine_tuning.jobs.create -t <file_id> -m gpt-4o-mini")
     print("=" * 60)
     return {"path": path, "count": count, "dataset_id": ds_id}
 

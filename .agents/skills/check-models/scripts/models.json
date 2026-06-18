@@ -1,18 +1,18 @@
 {
   "_comment": "Single source of truth for the check-models skill. Update the numbers in `openai` and `anthropic` whenever a new model ships, then re-run the scanner. The scanner derives the full replacement table from these policy values — you should not need to enumerate every old ID.",
-  "updated": "2026-06-17",
-  "verifiedBy": "WebSearch (OpenAI + Anthropic) + claude-api skill shared/models.md",
+  "updated": "2026-06-18",
+  "verifiedBy": "WebFetch developers.openai.com/api/docs/models + /deprecations (2026-06-18); Anthropic via claude-api skill shared/models.md",
 
   "openai": {
     "flagship": "gpt-5.5",
     "pro": "gpt-5.5-pro",
     "mini": "gpt-5.4-mini",
     "nano": "gpt-5.4-nano",
-    "flagshipMinVersion": 5.5,
+    "flagshipMinVersion": 5.4,
     "proMinVersion": 5.5,
     "miniMinVersion": 5.4,
     "nanoMinVersion": 5.4,
-    "notes": "GPT-5.5 is the latest flagship (released 2026-04-23, API id gpt-5.5-2026-04-23) and has no mini/nano variant — mini/nano stay on the 5.4 generation. Match the SIZE tier: a *-mini model migrates to the latest mini, never the flagship. The GPT-5 family are REASONING models — they reject temperature/top_p (see codeChanges). For temperature-dependent code use the nonReasoning tier below.",
+    "notes": "GPT-5.5 is the latest flagship (released 2026-04-23, API id gpt-5.5-2026-04-23) and has no mini/nano variant — mini/nano stay on the 5.4 generation. GPT-5.4 also remains available as a cheaper flagship (still current, NOT deprecated per OpenAI's models page), so flagshipMinVersion is 5.4 — only gpt-5.3 and older flag for migration; gpt-5.4 and gpt-5.5 both pass. Migration target for outdated flagships is still gpt-5.5 (the `flagship` value). Match the SIZE tier: a *-mini model migrates to the latest mini, never the flagship. The GPT-5 family are REASONING models — they reject temperature/top_p (see codeChanges). For temperature-dependent code use the nonReasoning tier below.",
     "nonReasoning": {
       "flagship": "gpt-4.1",
       "mini": "gpt-4.1-mini",
@@ -43,8 +43,30 @@
     "anthropicNote": "Anthropic Opus 4.8/4.7 reject temperature/top_p/top_k and budget_tokens (use thinking:{type:'adaptive'} + effort). See the claude-api skill `shared/model-migration.md` for full Claude code changes."
   },
 
+  "specialized": {
+    "_comment": "Non-chat OpenAI families (realtime / audio / image / transcribe / tts / embeddings / moderation) that don't map to the flagship/mini tiers. `current` IDs are treated as valid (not flagged); `deprecated` IDs map to their current replacement. Checked before review.openaiPatterns, which stays as the fallback for unrecognised variants. Verified against https://developers.openai.com/api/docs/models and /deprecations (2026-06-18).",
+    "current": [
+      "gpt-realtime", "gpt-realtime-1.5", "gpt-realtime-2", "gpt-realtime-mini",
+      "gpt-realtime-translate", "gpt-realtime-whisper",
+      "gpt-audio", "gpt-audio-1.5", "gpt-audio-mini",
+      "gpt-image-2",
+      "gpt-4o-transcribe", "gpt-4o-mini-transcribe",
+      "gpt-4o-mini-tts",
+      "text-embedding-3-small", "text-embedding-3-large",
+      "omni-moderation", "omni-moderation-latest"
+    ],
+    "deprecated": {
+      "gpt-4o-realtime-preview": "gpt-realtime-1.5",
+      "gpt-4o-mini-realtime-preview": "gpt-realtime-mini",
+      "gpt-4o-audio-preview": "gpt-audio-1.5",
+      "gpt-4o-mini-audio-preview": "gpt-audio-mini",
+      "gpt-4o-search-preview": "gpt-5.4-mini",
+      "gpt-4o-mini-search-preview": "gpt-5.4-mini"
+    }
+  },
+
   "review": {
-    "_comment": "Tokens that look like model IDs but need a human decision — the scanner flags them (severity: warn) and never auto-rewrites them.",
+    "_comment": "Tokens that look like model IDs but need a human decision — the scanner flags them (severity: warn) and never auto-rewrites them. specialized.current/deprecated (above) take precedence for known non-chat models.",
     "openaiPatterns": [
       "codex", "chat-latest", "realtime", "audio", "search", "transcribe",
       "image", "tts", "whisper", "embedding", "moderation", "instruct"

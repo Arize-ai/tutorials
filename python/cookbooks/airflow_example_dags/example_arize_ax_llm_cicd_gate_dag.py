@@ -23,12 +23,12 @@ Pipeline stages
 3. **create_accuracy_eval_task** — wrap the evaluator in a
    ``template_evaluation`` task scoped to the configured project.
 4. **build_baseline_run_config / create_baseline_run_exp_task** — register a
-   ``run_experiment`` task driven by a *weaker* config (gpt-5.4-mini + terse
+   ``run_experiment`` task driven by a *weaker* config (gpt-4o-mini + terse
    system prompt) to act as the baseline.
 5. **run_baseline_experiment.{trigger,wait,get_result}** — fire the baseline
    experiment with the accuracy judge chained server-side.
 6. **build_candidate_run_config / create_candidate_run_exp_task** — register
-   a ``run_experiment`` task driven by a *stronger* config (gpt-5.5 +
+   a ``run_experiment`` task driven by a *stronger* config (gpt-4.1 +
    careful system prompt).
 7. **run_candidate_experiment.{trigger,wait,get_result}** — fire the
    candidate experiment with the same chained accuracy judge.
@@ -50,7 +50,7 @@ Variables
 - ``arize_ax_project_id`` — project ID used to scope the accuracy eval task
   (required by the Eval Hub for ``template_evaluation`` tasks).
 - ``arize_ai_integration_id`` *or* env var ``ARIZE_AI_INTEGRATION_ID`` —
-  OpenAI integration in Arize with gpt-5.5 + gpt-5.4-mini access.
+  OpenAI integration in Arize with gpt-4.1 + gpt-4o-mini access.
 - ``arize_ax_prompt_name`` — optional. When set, the DAG promotes that
   prompt version on gate-pass.
 - ``arize_ax_prompt_label`` — label to apply (default ``"production"``).
@@ -154,8 +154,8 @@ def _build_accuracy_judge_config(**_ctx) -> dict[str, Any]:
         "classification_choices": {"correct": 1.0, "incorrect": 0.0},
         "llm_config": {
             "ai_integration_id": _resolve_integration_id(),
-            "model_name": "gpt-5.4-mini",
-            "invocation_parameters": {},
+            "model_name": "gpt-4o-mini",
+            "invocation_parameters": {"temperature": 0},
             "provider_parameters": {},
         },
     }
@@ -173,7 +173,7 @@ def _build_run_config(model: str, system_prompt: str):
                 {"role": "user", "content": "{{query}}"},
             ],
             "input_variable_format": "mustache",
-            "invocation_parameters": {},
+            "invocation_parameters": {"temperature": 0},
             "provider_parameters": {},
         }
 
@@ -278,12 +278,12 @@ with DAG(
     )
 
     # ----- Phase 3: baseline experiment (weaker config) --------------------
-    # Baseline + candidate both use gpt-5.5 (proven stable in earlier
+    # Baseline + candidate both use gpt-4.1 (proven stable in earlier
     # end-to-end testing); the comparison isolates prompt-engineering
     # impact rather than model quality.
     build_baseline_run_config = PythonOperator(
         task_id="build_baseline_run_config",
-        python_callable=_build_run_config("gpt-5.5", BASELINE_SYSTEM_PROMPT),
+        python_callable=_build_run_config("gpt-4.1", BASELINE_SYSTEM_PROMPT),
     )
     create_baseline_run_exp_task = ArizeAxCreateRunExperimentTaskOperator(
         task_id="create_baseline_run_exp_task",
@@ -310,7 +310,7 @@ with DAG(
     # ----- Phase 4: candidate experiment (stronger config) ------------------
     build_candidate_run_config = PythonOperator(
         task_id="build_candidate_run_config",
-        python_callable=_build_run_config("gpt-5.5", CANDIDATE_SYSTEM_PROMPT),
+        python_callable=_build_run_config("gpt-4.1", CANDIDATE_SYSTEM_PROMPT),
     )
     create_candidate_run_exp_task = ArizeAxCreateRunExperimentTaskOperator(
         task_id="create_candidate_run_exp_task",
@@ -365,7 +365,7 @@ with DAG(
             {"role": "system", "content": CANDIDATE_SYSTEM_PROMPT},
             {"role": "user", "content": "{query}"},
         ],
-        model="gpt-5.5",
+        model="gpt-4.1",
         commit_message="initial cicd-demo prompt version",
         input_variable_format="f_string",
     )

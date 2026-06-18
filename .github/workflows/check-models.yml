@@ -3,6 +3,10 @@ name: Check model versions
 # Flags out-of-date OpenAI / Anthropic model references introduced by a PR.
 # Only added lines are inspected, so existing references don't block unrelated PRs.
 # Policy (latest models + ignore lists) lives in .agents/skills/check-models/scripts/models.json.
+# Platform-wrapped IDs (Bedrock `[region.]anthropic.claude-…`, Databricks
+# `databricks-claude-…`, OpenRouter/LiteLLM `provider/model`) are flagged on their
+# embedded model substring — migrate the version but keep the platform's ID format.
+# See the "Platform-specific IDs" section of the check-models skill.
 
 on:
   pull_request:
@@ -69,7 +73,8 @@ jobs:
                 body += `| Location | Found | Suggested | Why |\n|---|---|---|---|\n`;
                 body += warns.map(row).join('\n') + '\n\n';
               }
-              body += `_See the [\`check-models\`](.agents/skills/check-models/SKILL.md) skill. Policy date: ${r.updated}. Add \`check-models:ignore\` to a line to skip it._`;
+              body += `_See the [\`check-models\`](.agents/skills/check-models/SKILL.md) skill. Policy date: ${r.updated}. Add \`check-models:ignore\` to a line to skip it._\n`;
+              body += `\n> ℹ️ **Platform-wrapped IDs** (Bedrock \`[region.]anthropic.claude-…\`, Databricks \`databricks-claude-…\`, OpenRouter/LiteLLM \`provider/model\`) are flagged on their embedded model name — bump the version but keep the platform's ID format (e.g. Bedrock 4.x needs a \`us.\`/\`eu.\`/\`apac.\` inference-profile prefix). See the skill's _Platform-specific IDs_ section.`;
             }
 
             // upsert a single bot comment

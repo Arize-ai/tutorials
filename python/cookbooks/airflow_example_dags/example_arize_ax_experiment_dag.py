@@ -2,7 +2,7 @@
 Example DAG: Arize AX experiment workflow (server-side).
 
 Creates a dataset, registers a server-side ``run_experiment`` task that
-calls gpt-5.5 with a mustache-templated prompt, chains a single
+calls gpt-4.1 with a mustache-templated prompt, chains a single
 ``template_evaluation`` accuracy judge that scores each row server-side,
 and lists the resulting experiments.
 
@@ -10,7 +10,7 @@ Requires:
 - Airflow connection ``arize_ax_default`` with API key.
 - Airflow Variable ``arize_ax_space_id``.
 - Airflow Variable ``arize_ai_integration_id`` (or env var
-  ``ARIZE_AI_INTEGRATION_ID``) — OpenAI integration with gpt-5.5 access.
+  ``ARIZE_AI_INTEGRATION_ID``) — OpenAI integration with gpt-4.1 access.
 """
 
 from __future__ import annotations
@@ -71,8 +71,8 @@ def _build_judge_config(**_ctx) -> dict[str, Any]:
         "classification_choices": {"correct": 1.0, "incorrect": 0.0},
         "llm_config": {
             "ai_integration_id": _resolve_integration_id(),
-            "model_name": "gpt-5.4-mini",
-            "invocation_parameters": {},
+            "model_name": "gpt-4o-mini",
+            "invocation_parameters": {"temperature": 0},
             "provider_parameters": {},
         },
     }
@@ -82,14 +82,14 @@ def _build_run_config(**_ctx) -> dict[str, Any]:
     return {
         "experiment_type": "llm_generation",
         "ai_integration_id": _resolve_integration_id(),
-        "model_name": "gpt-5.5",
+        "model_name": "gpt-4.1",
         "messages": [
             {"role": "system",
              "content": "Answer with only the direct factual answer."},
             {"role": "user", "content": "{{query}}"},
         ],
         "input_variable_format": "mustache",
-        "invocation_parameters": {},
+        "invocation_parameters": {"temperature": 0},
         "provider_parameters": {},
     }
 

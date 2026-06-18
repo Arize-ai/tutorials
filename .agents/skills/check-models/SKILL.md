@@ -36,6 +36,12 @@ The authoritative values live in [`models.json`](./models.json) — the scanner 
 
 > ⚠️ **Claude Fable 5 / Mythos 5** were export-control-suspended on 2026-06-12 — they are NOT valid migration targets. ⚠️ GPT-5.5 has **no** mini/nano variant.
 
+**Specialised (non-chat) OpenAI models** — realtime, audio, image, transcribe, tts, embeddings, and moderation models don't map to the flagship/mini tiers, so they're tracked separately in `models.json` → `specialized`:
+- `specialized.current` (e.g. `gpt-realtime-1.5`, `gpt-realtime-2`, `gpt-audio-1.5`, `gpt-image-2`, `gpt-4o-transcribe`, `gpt-4o-mini-tts`, `text-embedding-3-*`, `omni-moderation`) are **valid** — the scanner leaves them alone.
+- `specialized.deprecated` maps a retired ID to its current replacement (e.g. `gpt-4o-realtime-preview` → `gpt-realtime-1.5` (shut down 2026-05-07), `gpt-4o-audio-preview` → `gpt-audio-1.5`, `gpt-4o-search-preview` → `gpt-5.4-mini`) — flagged `warn` with the target, since the realtime/audio API surface differs and the swap needs a human eye.
+
+These are checked **before** `review.openaiPatterns`, which stays the fallback for any unrecognised variant. When a new specialised model ships (or one is retired), update these two lists.
+
 ### Reasoning vs non-reasoning — which OpenAI target?
 
 The GPT-5 family are **reasoning** models: they reject `temperature`, `top_p`, and the other sampling params. So the target depends on whether the call relies on those:
@@ -69,7 +75,7 @@ It prints the current policy, the WebSearch queries, the authoritative source UR
 ### 2. Scan
 
 ```bash
-node .agents/skills/check-models/scripts/scan-models.mjs ax api-clients      # scan paths
+node .agents/skills/check-models/scripts/scan-models.mjs python typescript   # scan paths
 node .agents/skills/check-models/scripts/scan-models.mjs --json > out.json   # machine-readable
 ```
 
@@ -84,6 +90,16 @@ For each finding, replace with the scanner's suggested target, **preserving loca
 - Keep the original separator/case for prose: `GPT-4o` → `GPT-5.5` (not `gpt-5.5`); `claude-sonnet-4.5` (dotted) → `claude-sonnet-4.6`.
 - Drop stale date snapshots: `gpt-5-2025-08-07` → `gpt-5.5` (use the bare alias, don't invent a date).
 - Keep both halves of any SDK-version tab in sync (v7/v8 examples).
+
+#### Platform-specific IDs (Bedrock, Databricks, OpenRouter, LiteLLM)
+
+The scanner matches the embedded `claude-*` / `gpt-*` substring inside a platform-wrapped ID and flags it. Bump the **version** but **keep the host platform's ID format** — these are not bare first-party IDs:
+
+- **Amazon Bedrock** — IDs look like `[region.]anthropic.claude-<...>[-vN:0]`. Claude 4.x (Opus 4.x, Sonnet 4.5+, Haiku 4.5) require a **cross-region inference profile**, so they take a `us.` / `eu.` / `apac.` prefix and **drop** the on-demand `-vN:0` suffix the Claude 3 IDs used. e.g. `anthropic.claude-3-haiku-20240307-v1:0` → `us.anthropic.claude-haiku-4-5`. Match the region prefix to the doc's endpoint (the repo's Bedrock docs default to `us.`).
+- **Databricks** — Foundation Model endpoint names look like `databricks-claude-sonnet-4-6`. Databricks owns these names and **availability is workspace/region-dependent** — bump the version following their pattern, but verify the endpoint actually exists rather than assuming it.
+- **OpenRouter / LiteLLM** — provider-prefixed: `anthropic/claude-sonnet-4-6`, `openai/gpt-5.4-mini`. Keep the `provider/` prefix; bump only the model half.
+
+When a migration changes more than the version number (a Bedrock region prefix, a Databricks endpoint name), **call it out for the reviewer** — it may need adjusting for their region/workspace.
 
 ### 4. Apply the code changes
 
@@ -113,6 +129,7 @@ Do **not** rewrite:
 - **Historical / release-notes / changelog / migration-guide** content — it documents what *was* true ("v1.2 added gpt-4o support"). These paths are in `excludePaths`; respect the same rule for any historical prose the scanner happens to catch.
 - **Non-model tokens** that share a prefix: `gpt-oss-*` (open-weight models, version-pinned), `claude-code`, `claude-agent-sdk`, web-crawler user-agents (`claude-web`, `claude-user`, `claude-searchbot`), image filenames. These are in the `ignore` list and won't be flagged.
 - **Comparative prose** that names an old model on purpose ("unlike GPT-4, GPT-5.5 can…"). Leave the historical reference; only update where the doc is telling the reader which model to *use*.
+- **Markdown image alt text** — `![…model gpt-4o-mini…](screenshot.png)` describes what a screenshot *shows*. Editing the alt text alone would make it misdescribe the image (the pixels still show the old model), so the scanner skips model names inside `![ … ]`. Update these by **regenerating the screenshot**, not by editing the alt text.
 
 To suppress a single line the scanner shouldn't touch, add a `check-models:ignore` comment on it.
 
@@ -123,7 +140,7 @@ Re-run the scanner — `✗ error` count should be 0. Remaining `⚠` are prose/
 Also guard against a **stale date carried onto a new alias**: when migrating a dated ID, drop the date (`claude-sonnet-4-5-20250929` → `claude-sonnet-4-6`, **not** `claude-sonnet-4-6-20250929` — that snapshot doesn't exist). The scanner can't catch this (it date-strips before classifying, so a wrong-dated current alias looks current), so grep for it:
 
 ```bash
-grep -rnE 'claude-(opus-4-8|sonnet-4-6)-20[0-9]' ax api-clients   # these aliases have no dated form
+grep -rnE 'claude-(opus-4-8|sonnet-4-6)-20[0-9]' python typescript   # these aliases have no dated form
 ```
 
 ## Updating for a new model launch

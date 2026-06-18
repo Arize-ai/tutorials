@@ -83,8 +83,8 @@ Optional Variables
   ``"false"`` so you can inspect the artifacts in the Arize UI between
   runs.
 - ``arize_ax_self_optimizing_model`` — the model used by the server-side
-  experiment tasks (default ``"gpt-5.4-mini"``). The optimizer always
-  uses ``gpt-5.5`` regardless.
+  experiment tasks (default ``"gpt-4o-mini"``). The optimizer always
+  uses ``gpt-4o`` regardless.
 """
 
 from __future__ import annotations
@@ -228,9 +228,9 @@ def _build_evaluator_template_config(**ctx) -> dict[str, Any]:
         "llm_config": {
             "ai_integration_id": integration_id,
             "model_name": Variable.get(
-                "arize_ax_self_optimizing_model", default_var="gpt-5.4-mini",
+                "arize_ax_self_optimizing_model", default_var="gpt-4o-mini",
             ),
-            "invocation_parameters": {},
+            "invocation_parameters": {"temperature": 0},
             "provider_parameters": {},
         },
     }
@@ -246,12 +246,12 @@ def _run_configuration_for_messages(messages: list[dict[str, str]]) -> dict[str,
         "experiment_type": "llm_generation",
         "ai_integration_id": integration_id,
         "model_name": Variable.get(
-            "arize_ax_self_optimizing_model", default_var="gpt-5.4-mini",
+            "arize_ax_self_optimizing_model", default_var="gpt-4o-mini",
         ),
         # Mustache + double-brace: matches Arize backend substitution.
         "messages": messages,
         "input_variable_format": "mustache",
-        "invocation_parameters": {},
+        "invocation_parameters": {"temperature": 0},
         "provider_parameters": {},
     }
 
@@ -360,7 +360,7 @@ def _optimize_and_store(**ctx) -> dict[str, Any]:
             f"eval.{_EVAL_NAME}.label",
             f"eval.{_EVAL_NAME}.explanation",
         ],
-        model_choice="gpt-5.5",
+        model_choice="gpt-4o",
     )
 
     messages = optimization.get("messages") or []
@@ -440,7 +440,7 @@ with DAG(
         space_id=_SPACE_JINJA,
         name=_PROMPT_NAME,
         messages=[{"role": "system", "content": _INITIAL_SYSTEM_PROMPT}],
-        model="gpt-5.4-mini",
+        model="gpt-4o-mini",
         commit_message="initial verbose starter prompt (deliberately broken for terse Q&A)",
         if_exists="skip",
     )
@@ -521,7 +521,7 @@ with DAG(
         name=_PROMPT_NAME,
         messages_task_id="optimize_and_store",
         messages_key="messages",
-        model="gpt-5.4-mini",
+        model="gpt-4o-mini",
         commit_message="optimized via Prompt Learning SDK from baseline feedback ({{ ts_nodash }})",
         if_exists="add_version",
     )

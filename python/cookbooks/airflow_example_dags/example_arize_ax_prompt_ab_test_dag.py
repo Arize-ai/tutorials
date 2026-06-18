@@ -87,7 +87,7 @@ def _ab_task(dataset_row: dict) -> dict:
     Replace with a real LLM call in production, e.g.::
 
         response = openai.chat.completions.create(
-            model="gpt-5.5",
+            model="gpt-4o",
             messages=[{"role": "user", "content": dataset_row["query"]}],
         )
         return {"output": response.choices[0].message.content}

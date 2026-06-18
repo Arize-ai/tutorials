@@ -17,7 +17,7 @@ export const weatherAnalysisTool = createTool({
     const { weatherData, location } = context;
 
     const result = await generateText({
-      model: openai('gpt-5.4-mini'),
+      model: openai('gpt-4o-mini'),
       prompt: `Analyze the following weather data for ${location} and provide detailed insights:
 
 ${weatherData}

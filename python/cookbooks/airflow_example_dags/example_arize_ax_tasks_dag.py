@@ -56,7 +56,7 @@ Requires:
   field on the ``arize_ax_default`` connection extras.
 - ``ARIZE_AI_INTEGRATION_ID`` in the **worker environment** (Docker/Kubernetes)
   **or** as an Airflow **Variable** (Admin → Variables).  This is the Arize
-  AI Integration ID for the LLM used by the judge (e.g. OpenAI gpt-5.4-mini).
+  AI Integration ID for the LLM used by the judge (e.g. OpenAI gpt-4o-mini).
   If neither is set, ``check_ai_integration`` short-circuits cleanly and the
   entire DAG is skipped.
 - At least one project must exist in the space.  If none exist,
@@ -174,8 +174,8 @@ def _build_template_config(**_ctx) -> dict[str, Any]:
             "classification_choices": {"irrelevant": 0, "relevant": 1},
             "llm_config": {
                 "ai_integration_id": integration_id,
-                "model_name": "gpt-5.4-mini",
-                "invocation_parameters": {},
+                "model_name": "gpt-4o-mini",
+                "invocation_parameters": {"temperature": 0},
                 "provider_parameters": {},
             },
         }

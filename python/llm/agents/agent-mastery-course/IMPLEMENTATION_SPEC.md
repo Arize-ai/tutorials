@@ -155,7 +155,7 @@ out = graph.invoke(state)
 OPENAI_API_KEY=your_openai_api_key_here
 # OR
 OPENROUTER_API_KEY=your_openrouter_api_key_here
-OPENROUTER_MODEL=openai/gpt-5.4-mini
+OPENROUTER_MODEL=openai/gpt-4o-mini
 
 # Observability (optional but recommended)
 ARIZE_SPACE_ID=your_arize_space_id
@@ -266,7 +266,7 @@ uvicorn main:app --reload --port 8001
 4. **High latency**
    - Verify parallel execution is working
    - Check LLM API response times
-   - Consider using a faster model (e.g., gpt-5.4-mini vs gpt-5.5)
+   - Consider using a faster model (e.g., gpt-3.5-turbo vs gpt-4)
 
 ## Code Structure
 
