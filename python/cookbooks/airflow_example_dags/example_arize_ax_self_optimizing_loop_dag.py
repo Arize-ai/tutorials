@@ -83,7 +83,7 @@ Optional Variables
   ``"false"`` so you can inspect the artifacts in the Arize UI between
   runs.
 - ``arize_ax_self_optimizing_model`` — the model used by the server-side
-  experiment tasks (default ``"gpt-4o-mini"``). The optimizer always
+  experiment tasks (default ``"gpt-4o-mini"``). The optimizer always  # demo: gate test edit
   uses ``gpt-4o`` regardless.
 """
 
