@@ -1,7 +1,9 @@
 name: Check model versions
 
-# Flags out-of-date OpenAI / Anthropic model references introduced by a PR.
-# Only added lines are inspected, so existing references don't block unrelated PRs.
+# Flags out-of-date OpenAI / Anthropic / Google model references.
+# Two tiers: outdated models a PR INTRODUCES on changed lines FAIL the check; outdated
+# models that already exist on unchanged lines of a file the PR touches are reported as
+# non-blocking WARNINGS. Untouched files are never inspected, so unrelated PRs aren't blocked.
 # Policy (latest models + ignore lists) lives in .agents/skills/check-models/scripts/models.json.
 # Platform-wrapped IDs (Bedrock `[region.]anthropic.claude-…`, Databricks
 # `databricks-claude-…`, OpenRouter/LiteLLM `provider/model`) are flagged on their
@@ -28,7 +30,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Scan changed lines for outdated models
+      - name: Scan touched files for outdated models
         id: scan
         run: |
           node .agents/skills/check-models/scripts/scan-models.mjs \
@@ -45,10 +47,16 @@ jobs:
             const r = JSON.parse(fs.readFileSync('model-scan.json', 'utf8'));
             const marker = '<!-- check-models-bot -->';
 
-            const errors = r.findings.filter(f => f.severity === 'error');
-            const warns  = r.findings.filter(f => f.severity === 'warn');
+            // Three buckets:
+            //  introduced  — outdated model on a line this PR added/changed  → FAILS the check
+            //  preExisting — outdated model on an unchanged line of a touched file → warn, non-blocking
+            //  warns       — prose / specialised variants / GPT-5 param hints (changed lines) → review
+            const introduced  = r.findings.filter(f => f.severity === 'error' && f.changed !== false);
+            const preExisting = r.findings.filter(f => f.severity === 'error' && f.changed === false);
+            const warns       = r.findings.filter(f => f.severity === 'warn');
 
             const row = f => `| \`${f.file}\`:${f.line} | \`${f.token}\` | ${f.action === 'replace' ? '`' + f.target + '`' : '—'} | ${f.reason} |`;
+            const table = items => `| Location | Found | Suggested | Why |\n|---|---|---|---|\n` + items.map(row).join('\n') + '\n\n';
             let body = `${marker}\n## 🤖 Model version check\n\n`;
 
             // Surface a stale-policy warning (content references a newer model than the policy knows, or the policy is old)
@@ -59,19 +67,20 @@ jobs:
                 : `> ⚠️ **The model policy is ${r.stale.ageDays} days old** (updated ${r.updated}). Consider \`scan-models.mjs --refresh\`.\n\n`;
             }
 
-            if (errors.length === 0 && warns.length === 0) {
-              body += `✓ No outdated model references in the changed lines. _(policy ${r.updated})_`;
+            if (!introduced.length && !preExisting.length && !warns.length) {
+              body += `✓ No outdated model references in this PR. _(policy ${r.updated})_`;
             } else {
-              if (errors.length) {
-                body += `### ✗ ${errors.length} outdated model reference(s) — please update\n\n`;
-                body += `| Location | Found | Suggested | Why |\n|---|---|---|---|\n`;
-                body += errors.map(row).join('\n') + '\n\n';
+              if (introduced.length) {
+                body += `### ✗ ${introduced.length} outdated model reference(s) introduced — please update (this fails the check)\n\n`;
+                body += `On lines this PR adds or changes:\n\n` + table(introduced);
+              }
+              if (preExisting.length) {
+                body += `### ⚠️ ${preExisting.length} pre-existing outdated model(s) in files this PR touches — not blocking\n\n`;
+                body += `These are on unchanged lines, so the check still passes — but since you're already editing these files, consider updating them too.\n\n` + table(preExisting);
               }
               if (warns.length) {
                 body += `### ⚠ ${warns.length} item(s) to review (not blocking)\n\n`;
-                body += `Prose mentions, specialised variants (\`*-codex\`, \`*-chat-latest\`), or GPT-5/o-series code changes (\`max_tokens\` → \`max_completion_tokens\`, drop \`temperature\`).\n\n`;
-                body += `| Location | Found | Suggested | Why |\n|---|---|---|---|\n`;
-                body += warns.map(row).join('\n') + '\n\n';
+                body += `Prose mentions, specialised variants (\`*-codex\`, \`*-chat-latest\`), or GPT-5/o-series code changes (\`max_tokens\` → \`max_completion_tokens\`, drop \`temperature\`).\n\n` + table(warns);
               }
               body += `_See the [\`check-models\`](.agents/skills/check-models/SKILL.md) skill. Policy date: ${r.updated}. Add \`check-models:ignore\` to a line to skip it._\n`;
               body += `\n> ℹ️ **Platform-wrapped IDs** (Bedrock \`[region.]anthropic.claude-…\`, Databricks \`databricks-claude-…\`, OpenRouter/LiteLLM \`provider/model\`) are flagged on their embedded model name — bump the version but keep the platform's ID format (e.g. Bedrock 4.x needs a \`us.\`/\`eu.\`/\`apac.\` inference-profile prefix). See the skill's _Platform-specific IDs_ section.`;
@@ -85,13 +94,13 @@ jobs:
             // Post when there are findings, or when this PR concretely introduces a
             // newer-than-policy model. Don't open a fresh comment for date-staleness
             // alone (it would fire on every PR once the policy ages) — only update an existing one.
-            const worthPosting = errors.length || warns.length || (r.stale && r.stale.byContent);
+            const worthPosting = introduced.length || preExisting.length || warns.length || (r.stale && r.stale.byContent);
             if (existing) {
               await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
             } else if (worthPosting) {
               await github.rest.issues.createComment({ owner, repo, issue_number: prNumber, body });
             }
 
-            if (errors.length) {
-              core.setFailed(`${errors.length} outdated model reference(s) introduced by this PR.`);
+            if (introduced.length) {
+              core.setFailed(`${introduced.length} outdated model reference(s) introduced by this PR.`);
             }
