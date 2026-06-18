@@ -78,7 +78,10 @@ It prints the current policy, the WebSearch queries, the authoritative source UR
 ```bash
 node .agents/skills/check-models/scripts/scan-models.mjs python typescript   # scan paths
 node .agents/skills/check-models/scripts/scan-models.mjs --json > out.json   # machine-readable
+node .agents/skills/check-models/scripts/scan-models.mjs --diff <base> python typescript  # PR-gate mode
 ```
+
+**`--diff <base>` (the CI gate)** scans the whole of each *touched* file but tags every finding with `changed` (was the line added/modified by the PR?). It splits outdated-model errors into two tiers: **introduced** (on a changed line) → fails the run; **pre-existing** (on an unchanged line of a touched file) → reported as a non-blocking warning. Untouched files are never read. Full-scan mode (no `--diff`) tags everything `changed:true`, so it fails on any error as before.
 
 Each finding is one of:
 - `✗ error` — an outdated lowercase canonical model ID (e.g. `gpt-4o-mini`). Migrate it.
