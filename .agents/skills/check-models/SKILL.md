@@ -33,6 +33,7 @@ The authoritative values live in [`models.json`](./models.json) — the scanner 
 **OpenAI (reasoning — default targets)** — flagship `gpt-5.5`, pro `gpt-5.5-pro`, mini `gpt-5.4-mini`, nano `gpt-5.4-nano`.
 **OpenAI (non-reasoning — for temperature-dependent code)** — flagship `gpt-4.1`, mini `gpt-4.1-mini`, nano `gpt-4.1-nano`. Active, **not** deprecated, and they **accept `temperature`/`top_p`**.
 **Anthropic** — Opus `claude-opus-4-8`, Sonnet `claude-sonnet-4-6`, Haiku `claude-haiku-4-5`.
+**Google Gemini** — Pro `gemini-2.5-pro`, Flash `gemini-3.5-flash`, Flash-Lite `gemini-3.1-flash-lite`. The latest **stable** model per tier sits on *different* generations (like OpenAI), so the policy tracks Gemini with an explicit `google.current` allow-list and a `google.deprecated` → replacement map (in `models.json`), not a single version floor. Match the SIZE tier (pro/flash/flash-lite). `gemini-2.0-*` (shut down 2026-06-01), `gemini-1.5-*`, and `gemini-1.0-*` are deprecated; `gemini-2.5-*` and `gemini-3.x` are still current and are left alone.
 
 > ⚠️ **Claude Fable 5 / Mythos 5** were export-control-suspended on 2026-06-12 — they are NOT valid migration targets. ⚠️ GPT-5.5 has **no** mini/nano variant.
 

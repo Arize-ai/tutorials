@@ -1,7 +1,7 @@
 {
   "_comment": "Single source of truth for the check-models skill. Update the numbers in `openai` and `anthropic` whenever a new model ships, then re-run the scanner. The scanner derives the full replacement table from these policy values — you should not need to enumerate every old ID.",
   "updated": "2026-06-18",
-  "verifiedBy": "WebFetch developers.openai.com/api/docs/models + /deprecations (2026-06-18); Anthropic via claude-api skill shared/models.md",
+  "verifiedBy": "WebFetch developers.openai.com/api/docs/models + /deprecations (2026-06-18); Google via ai.google.dev/gemini-api/docs/models (2026-06-18); Anthropic via claude-api skill shared/models.md",
 
   "openai": {
     "flagship": "gpt-5.5",
@@ -28,6 +28,26 @@
     "sonnet": "claude-sonnet-4-6",
     "haiku": "claude-haiku-4-5",
     "notes": "Opus 4.8 / Sonnet 4.6 / Haiku 4.5 are the current GA tiers. Claude Fable 5 and Claude Mythos 5 exist but were export-control-suspended on 2026-06-12 — NEVER migrate to them. Match the SIZE tier (opus/sonnet/haiku)."
+  },
+
+  "google": {
+    "_comment": "Gemini tiers span generations (the latest STABLE per tier is on different generations, like OpenAI). `current` IDs are valid (not flagged). `deprecated` IDs map to their current-tier replacement. Verified against https://ai.google.dev/gemini-api/docs/models + /changelog (2026-06-18). Match the SIZE tier: pro/flash/flash-lite.",
+    "tiers": { "pro": "gemini-2.5-pro", "flash": "gemini-3.5-flash", "flash-lite": "gemini-3.1-flash-lite" },
+    "current": [
+      "gemini-2.5-pro", "gemini-3.1-pro", "gemini-3.5-pro",
+      "gemini-3.5-flash", "gemini-3-flash", "gemini-2.5-flash",
+      "gemini-3.1-flash-lite", "gemini-2.5-flash-lite"
+    ],
+    "deprecated": {
+      "gemini-2.0-flash": "gemini-3.5-flash",
+      "gemini-2.0-flash-lite": "gemini-3.1-flash-lite",
+      "gemini-1.5-pro": "gemini-2.5-pro",
+      "gemini-1.5-flash": "gemini-3.5-flash",
+      "gemini-1.5-flash-8b": "gemini-3.1-flash-lite",
+      "gemini-1.0-pro": "gemini-2.5-pro",
+      "gemini-pro": "gemini-2.5-pro",
+      "gemini-pro-vision": "gemini-2.5-pro"
+    }
   },
 
   "codeChanges": {
