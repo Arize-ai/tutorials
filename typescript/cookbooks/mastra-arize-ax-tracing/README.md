@@ -38,7 +38,7 @@ To populate Arize AX with a diverse set of traces at once — covering each tool
 npm run generate-traces
 ```
 
-This sends a curated set of prompts to the orchestrator agent and flushes the resulting spans to Arize AX. See [src/scripts/generate-traces.ts](src/scripts/generate-traces.ts) to adjust the prompts.
+This sends a curated set of ~50 prompts to the orchestrator agent and flushes the resulting spans to Arize AX. The prompts live in [src/scripts/example-prompts.json](src/scripts/example-prompts.json), grouped by the tool path each one exercises — edit that file to add or change prompts.
 
 ## How it works
 
