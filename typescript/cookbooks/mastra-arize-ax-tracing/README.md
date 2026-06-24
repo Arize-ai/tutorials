@@ -1,10 +1,10 @@
 # Mastra Agent with Arize AX Tracing
 
-Companion repo for the [Arize AX tutorial](https://arize.com/docs/ax/). A Mastra orchestrator agent instrumented with OpenInference tracing that sends spans to Arize AX.
+Companion repo for the Arize AX guide [Align LLM Evals with Human Judgment](https://arize.com/docs/ax/cookbooks/evaluate/align-llm-evals-with-human-judgment). A Mastra orchestrator agent instrumented with OpenInference tracing that sends spans to Arize AX.
 
 ## Prerequisites
 
-- [Node.js](https://nodejs.org) v20.9.0+
+- [Node.js](https://nodejs.org) v22.13.0+
 - An [Arize AX](https://app.arize.com) account (Space ID and API key)
 - An [OpenAI](https://platform.openai.com) API key
 
@@ -28,7 +28,7 @@ export ARIZE_SPACE_ID="your-arize-space-id"
 npm start
 ```
 
-This starts the Mastra dev server and opens the agent UI. Send requests to the weather orchestrator agent to generate traces — they will appear in your Arize AX space within a few seconds.
+This starts the Mastra dev server. Open [Mastra Studio](https://mastra.ai/docs/studio/overview) at [http://localhost:4111](http://localhost:4111) in your browser (Mastra picks the next free port if 4111 is taken), select the **WeatherOrchestratorAgent**, and send it a request such as "What should I do in London today?" to generate traces — they will appear in your Arize AX space within a few seconds.
 
 ## How it works
 
@@ -39,14 +39,19 @@ User request
     ↓
 Weather Orchestrator Agent
     ↓
-weatherTool          → fetches current weather data
+weatherTool          → fetches current weather data (Open-Meteo)
     ↓
-weatherAnalysisTool  → analyzes weather patterns
+weatherAnalysisTool  → delegates to Weather Analysis Agent (LLM)
     ↓
-activityPlanningTool → recommends activities
+activityPlanningTool → delegates to Activity Planning Agent (LLM)
     ↓
 Final response
 ```
+
+The analysis and planning tools don't call the model directly — they resolve a
+dedicated worker agent from the Mastra instance (`mastra.getAgent(...)`) and call
+`agent.generate(...)`. Because those calls run inside Mastra, their LLM spans are
+captured as nested children of the tool span in the trace.
 
 Tracing is configured in [src/mastra/index.ts](src/mastra/index.ts) using `@mastra/arize`, wired into Mastra's AI Tracing (`observability`) system. Every agent invocation and tool call is exported as an OpenInference span to `https://otlp.arize.com/v1/traces`.
 
@@ -56,7 +61,9 @@ Tracing is configured in [src/mastra/index.ts](src/mastra/index.ts) using `@mast
 src/mastra/
 ├── index.ts                          # Mastra setup + Arize AX exporter
 ├── agents/
-│   └── weather-orchestrator-agent.ts
+│   ├── weather-orchestrator-agent.ts # coordinates the tools
+│   ├── weather-analysis-agent.ts     # LLM worker, called by weatherAnalysisTool
+│   └── activity-planning-agent.ts    # LLM worker, called by activityPlanningTool
 └── tools/
     ├── weather-tool.ts
     ├── weather-analysis-tool.ts

@@ -14,7 +14,7 @@
   "description": "Companion repo for Arize AX tutorial: Mastra orchestrator agent with Arize AX tracing",
   "type": "module",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22.13.0"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.74",
