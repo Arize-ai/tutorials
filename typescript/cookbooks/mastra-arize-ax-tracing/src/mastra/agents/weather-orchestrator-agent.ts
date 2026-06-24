@@ -7,6 +7,7 @@ import { weatherAnalysisTool } from '../tools/weather-analysis-tool';
 import { activityPlanningTool } from '../tools/activity-planning-tool';
 
 export const weatherOrchestratorAgent = new Agent({
+  id: 'weatherOrchestratorAgent',
   name: 'WeatherOrchestratorAgent',
   instructions: `
       You are the Weather Orchestrator Agent. You MUST use the available tools to provide weather information and recommendations.
@@ -46,6 +47,7 @@ export const weatherOrchestratorAgent = new Agent({
   },
   memory: new Memory({
     storage: new LibSQLStore({
+      id: 'agent-memory',
       url: 'file:../mastra.db',
     }),
   }),

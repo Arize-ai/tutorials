@@ -14,9 +14,7 @@ export const activityPlanningTool = createTool({
   outputSchema: z.object({
     activityPlan: z.string().describe('Detailed activity recommendations and schedule')
   }),
-  execute: async ({ context }) => {
-    const { weatherData, weatherAnalysis, location } = context;
-
+  execute: async ({ weatherData, weatherAnalysis, location }) => {
     const result = await generateText({
       model: openai('gpt-4o-mini'),
       prompt: `Based on the weather data${weatherAnalysis ? ' and analysis' : ''} for ${location}, create a detailed activity plan:

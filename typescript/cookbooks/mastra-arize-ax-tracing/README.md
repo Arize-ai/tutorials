@@ -48,7 +48,7 @@ activityPlanningTool → recommends activities
 Final response
 ```
 
-Tracing is configured in [src/mastra/index.ts](src/mastra/index.ts) using `@arizeai/openinference-mastra`. Every agent invocation and tool call is exported as an OpenInference span to `https://otlp.arize.com/v1/traces`.
+Tracing is configured in [src/mastra/index.ts](src/mastra/index.ts) using `@mastra/arize`, wired into Mastra's AI Tracing (`observability`) system. Every agent invocation and tool call is exported as an OpenInference span to `https://otlp.arize.com/v1/traces`.
 
 ## Project structure
 
@@ -66,5 +66,5 @@ src/mastra/
 ## Resources
 
 - [Arize AX Documentation](https://arize.com/docs/ax/)
-- [OpenInference for Mastra](https://github.com/Arize-ai/openinference/tree/main/js/packages/openinference-mastra)
+- [Mastra Arize exporter (`@mastra/arize`)](https://mastra.ai/en/docs/observability/ai-tracing/exporters/arize)
 - [Mastra Documentation](https://mastra.ai/docs)

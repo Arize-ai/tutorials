@@ -13,9 +13,7 @@ export const weatherAnalysisTool = createTool({
   outputSchema: z.object({
     analysis: z.string().describe('Detailed weather analysis and forecast interpretation')
   }),
-  execute: async ({ context }) => {
-    const { weatherData, location } = context;
-
+  execute: async ({ weatherData, location }) => {
     const result = await generateText({
       model: openai('gpt-4o-mini'),
       prompt: `Analyze the following weather data for ${location} and provide detailed insights:
