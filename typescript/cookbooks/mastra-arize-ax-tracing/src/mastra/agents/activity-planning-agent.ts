@@ -16,5 +16,5 @@ export const activityPlanningAgent = new Agent({
       Follow the exact output format requested in the message. Respond with the
       plan only.
 `,
-  model: openai('gpt-4o-mini'),
+  model: openai('gpt-4.1-mini'),
 });
