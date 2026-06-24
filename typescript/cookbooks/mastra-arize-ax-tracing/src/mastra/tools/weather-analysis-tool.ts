@@ -1,7 +1,5 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { generateText } from 'ai';
-import { openai } from '@ai-sdk/openai';
 
 export const weatherAnalysisTool = createTool({
   id: 'weather-analysis-tool',
@@ -13,10 +11,16 @@ export const weatherAnalysisTool = createTool({
   outputSchema: z.object({
     analysis: z.string().describe('Detailed weather analysis and forecast interpretation')
   }),
-  execute: async ({ weatherData, location }) => {
-    const result = await generateText({
-      model: openai('gpt-4o-mini'),
-      prompt: `Analyze the following weather data for ${location} and provide detailed insights:
+  // Delegate to the weatherAnalysisAgent via the Mastra instance so the LLM
+  // call is traced as a child span of this tool in Arize AX.
+  execute: async ({ weatherData, location }, { mastra }) => {
+    if (!mastra) {
+      throw new Error('Mastra instance is not available in the tool execution context');
+    }
+
+    const agent = mastra.getAgent('weatherAnalysisAgent');
+    const result = await agent.generate(
+      `Analyze the following weather data for ${location} and provide detailed insights:
 
 ${weatherData}
 
@@ -26,7 +30,7 @@ Please provide:
 3. Optimal timing windows throughout the day
 4. Any weather risks or special considerations
 5. Overall assessment of weather suitability for outdoor vs indoor activities`
-    });
+    );
 
     return {
       analysis: result.text

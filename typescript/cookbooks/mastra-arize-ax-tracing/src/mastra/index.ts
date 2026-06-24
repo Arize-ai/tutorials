@@ -3,8 +3,10 @@ import { PinoLogger } from '@mastra/loggers';
 import { LibSQLStore } from '@mastra/libsql';
 import { Observability } from '@mastra/observability';
 import { ArizeExporter } from '@mastra/arize';
-// Import orchestrator/worker agents - this is the only workflow pattern now
+// Orchestrator agent plus the LLM-backed worker agents its tools delegate to.
 import { weatherOrchestratorAgent } from './agents/weather-orchestrator-agent';
+import { weatherAnalysisAgent } from './agents/weather-analysis-agent';
+import { activityPlanningAgent } from './agents/activity-planning-agent';
 
 const ARIZE_SPACE_ID = process.env.ARIZE_SPACE_ID;
 const ARIZE_API_KEY = process.env.ARIZE_API_KEY;
@@ -19,7 +21,10 @@ export const mastra = new Mastra({
   // No workflows - using pure orchestrator/worker agent pattern
   agents: {
     // Orchestrator agent that coordinates the entire workflow
-    weatherOrchestratorAgent
+    weatherOrchestratorAgent,
+    // Worker agents the orchestrator's tools delegate to (traced child spans)
+    weatherAnalysisAgent,
+    activityPlanningAgent
   },
   storage: new LibSQLStore({
     // File-backed so Mastra's internal workflow/scheduler tables (e.g.
