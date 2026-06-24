@@ -39,7 +39,7 @@ export const weatherOrchestratorAgent = new Agent({
 
       Remember: You are a tool orchestrator, not a direct weather information provider.
 `,
-  model: openai('gpt-4.1-mini'),
+  model: openai('gpt-5.4-mini'),
   tools: { 
     weatherTool,
     weatherAnalysisTool,

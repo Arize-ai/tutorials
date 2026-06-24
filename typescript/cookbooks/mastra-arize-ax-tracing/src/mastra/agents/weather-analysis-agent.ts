@@ -16,5 +16,5 @@ export const weatherAnalysisAgent = new Agent({
 
       Respond with the analysis only. Do not ask follow-up questions.
 `,
-  model: openai('gpt-4.1-mini'),
+  model: openai('gpt-5.4-mini'),
 });
