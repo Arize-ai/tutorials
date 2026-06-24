@@ -44,7 +44,7 @@ This sends a curated set of ~50 prompts to the orchestrator agent and flushes th
 
 A single orchestrator agent coordinates three tools in sequence:
 
-```
+```text
 User request
     ↓
 Weather Orchestrator Agent
