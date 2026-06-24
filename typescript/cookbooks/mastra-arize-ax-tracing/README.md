@@ -30,6 +30,16 @@ npm start
 
 This starts the Mastra dev server. Open [Mastra Studio](https://mastra.ai/docs/studio/overview) at [http://localhost:4111](http://localhost:4111) in your browser (Mastra picks the next free port if 4111 is taken), select the **WeatherOrchestratorAgent**, and send it a request such as "What should I do in London today?" to generate traces — they will appear in your Arize AX space within a few seconds.
 
+### Generate a batch of example traces
+
+To populate Arize AX with a diverse set of traces at once — covering each tool path (weather lookup, activity planning, and the full analysis-and-planning chain) — run:
+
+```bash
+npm run generate-traces
+```
+
+This sends a curated set of prompts to the orchestrator agent and flushes the resulting spans to Arize AX. See [src/scripts/generate-traces.ts](src/scripts/generate-traces.ts) to adjust the prompts.
+
 ## How it works
 
 A single orchestrator agent coordinates three tools in sequence:
