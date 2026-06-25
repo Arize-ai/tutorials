@@ -1,3 +1,6 @@
 node_modules
 .mastra/
 package-lock.json
+*.db
+*.db-shm
+*.db-wal

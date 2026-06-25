@@ -1,7 +1,5 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { generateText } from 'ai';
-import { openai } from '@ai-sdk/openai';
 
 export const activityPlanningTool = createTool({
   id: 'activity-planning-tool',
@@ -14,12 +12,16 @@ export const activityPlanningTool = createTool({
   outputSchema: z.object({
     activityPlan: z.string().describe('Detailed activity recommendations and schedule')
   }),
-  execute: async ({ context }) => {
-    const { weatherData, weatherAnalysis, location } = context;
+  // Delegate to the activityPlanningAgent via the Mastra instance so the LLM
+  // call is traced as a child span of this tool in Arize AX.
+  execute: async ({ weatherData, weatherAnalysis, location }, { mastra }) => {
+    if (!mastra) {
+      throw new Error('Mastra instance is not available in the tool execution context');
+    }
 
-    const result = await generateText({
-      model: openai('gpt-4o-mini'),
-      prompt: `Based on the weather data${weatherAnalysis ? ' and analysis' : ''} for ${location}, create a detailed activity plan:
+    const agent = mastra.getAgent('activityPlanningAgent');
+    const result = await agent.generate(
+      `Based on the weather data${weatherAnalysis ? ' and analysis' : ''} for ${location}, create a detailed activity plan:
 
 WEATHER DATA:
 ${weatherData}
@@ -64,7 +66,7 @@ Guidelines followed:
 - Consider weather conditions for activity selection
 - Provide backup indoor options
 - Include timing recommendations`
-    });
+    );
 
     return {
       activityPlan: result.text

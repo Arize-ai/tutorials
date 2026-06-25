@@ -1,0 +1,64 @@
+{
+  "weather-only": [
+    "What's the weather in Tokyo right now?",
+    "Is it raining in Seattle at the moment?",
+    "How hot does it feel in Dubai today?",
+    "Give me the current conditions in Reykjavik.",
+    "What's the temperature in Nairobi right now?",
+    "Is it windy in Wellington today?",
+    "How humid is it in Bangkok at the moment?",
+    "What are the current conditions in Buenos Aires?",
+    "Is it cold in Helsinki today?",
+    "Tell me the current weather in Vancouver.",
+    "How's the weather in Mexico City right now?",
+    "What's it like outside in Cairo?"
+  ],
+  "weather+planning": [
+    "What should I do in Barcelona today?",
+    "Give me some activity ideas for a day out in Amsterdam.",
+    "I'm spending the day in Cape Town — what's good to do given the weather?",
+    "Recommend things to do in Lisbon today.",
+    "What's a good way to spend the afternoon in Berlin?",
+    "Plan a fun day for me in Sydney.",
+    "I have a free day in Kyoto — what should I do?",
+    "Suggest some outdoor activities in Vienna today.",
+    "What can I do with the kids in Copenhagen today?",
+    "I'm visiting Edinburgh — recommend a day's itinerary.",
+    "What's good to do in Marrakech given today's weather?",
+    "Help me plan a relaxed day in Porto."
+  ],
+  "weather+analysis+planning": [
+    "Give me a detailed weather analysis and a full activity plan for London today.",
+    "Analyze the conditions in Reykjavik and plan my whole day around them.",
+    "I want an in-depth look at the weather in Singapore plus a complete itinerary for today.",
+    "Break down today's weather in Toronto and build me a full day plan.",
+    "Give me a thorough weather assessment for Rome and a detailed schedule.",
+    "Analyze the forecast for Oslo and create a complete day itinerary.",
+    "I need a deep dive on Chicago's weather and a full plan around it.",
+    "Assess the conditions in Auckland and map out my entire day.",
+    "Detailed weather breakdown and full-day plan for Seoul, please.",
+    "Examine today's weather in Athens and plan everything for me.",
+    "Give me a complete analysis and itinerary for a day in Prague.",
+    "Walk me through the weather in Cape Town and a full activity schedule."
+  ],
+  "multi-location": [
+    "Is it better weather for a long walk in Oslo or in Lisbon right now, and what should I do there?",
+    "Compare the weather in Madrid and Rome today and tell me which is better for sightseeing.",
+    "Which has nicer weather right now — San Francisco or Los Angeles — and what should I do?",
+    "I'm choosing between Berlin and Munich for a day trip; which has better weather and what should I do?",
+    "Should I go to the beach in Nice or Barcelona today based on the weather?",
+    "Compare conditions in New York and Boston and suggest activities for the better one."
+  ],
+  "vague-intent": [
+    "I might head outside in Chicago later... or maybe not. What do you reckon?",
+    "Not sure what to do today in Dublin, help me out?",
+    "Thinking about going out in Melbourne, but I'm undecided — thoughts?",
+    "I was wondering if you could help me figure out my day in Glasgow."
+  ],
+  "activity-constrained": [
+    "Plan an indoor-friendly day in Mumbai in case the weather is rough.",
+    "I want only outdoor activities in Lisbon today — is that doable given the weather?",
+    "Suggest a rainy-day plan for Manchester.",
+    "Plan a day of mostly walking and parks in Munich if the weather allows."
+  ]
+}
