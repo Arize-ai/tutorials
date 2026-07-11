@@ -1,0 +1,11 @@
+services:
+  labs:
+    build:
+      context: .
+      dockerfile: Dockerfile.labs
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./labs:/workspace/labs
+    env_file:
+      - .env
