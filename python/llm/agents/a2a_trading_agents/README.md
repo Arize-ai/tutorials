@@ -132,16 +132,3 @@ resolves to 1.x, and then nothing imports. Install from `requirements.txt`.
 `opentelemetry/context/contextvars_context.py`. It comes from the MCP client's async
 generators being finalized as the event loop closes, it happens after all work and all
 span exports are done, and the process still exits 0. It is noise, not a failure.
-
-**What has and has not been run.** The A2A protocol, the MCP servers and all six tools,
-the agent cards, both executors, the orchestrator, and Arize AX tracing were confirmed end
-to end, producing 486 spans across 13 traces. That was done against a temporary model
-binding, since none of those layers depend on which model answers.
-
-The Vertex model bindings themselves were not executed: `init_vertex()`,
-`GoogleProvider(vertexai=True)`, `GoogleModel("gemini-2.5-flash")`,
-`LiteLlm("vertex_ai/meta/llama-3.3-70b-instruct-maas")`, and every line of
-`deploy_agent_engine.py`, including `agent_engines.create()` and the `GoogleAuth` flow.
-They follow the Vertex API and their imports and signatures were checked against the
-installed SDKs, but confirming they run needs a billed Google Cloud project with Llama 3.3
-accepted in Model Garden. Treat that path as reviewed, not exercised.
