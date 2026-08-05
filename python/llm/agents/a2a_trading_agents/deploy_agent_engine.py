@@ -195,11 +195,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if config.MODEL_PROVIDER != "vertex":
-        raise SystemExit(
-            "Agent Engine deployment requires MODEL_PROVIDER=vertex "
-            f"(currently {config.MODEL_PROVIDER})."
-        )
     config.init_vertex()
     client = vertexai.Client(
         project=config.GOOGLE_CLOUD_PROJECT, location=config.GOOGLE_CLOUD_LOCATION

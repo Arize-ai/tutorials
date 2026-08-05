@@ -53,7 +53,6 @@ async def main() -> int:
     args = parser.parse_args()
 
     tracing.setup_tracing()
-    print(f"Model provider: {config.MODEL_PROVIDER}")
     print("Starting the Bear and Bull A2A agents...")
 
     agents = subprocess.Popen(

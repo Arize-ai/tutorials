@@ -1,16 +1,14 @@
 """Shared configuration, read from the environment.
 
-MODEL_PROVIDER selects where the three agents get their models:
+The three agents run on Vertex AI: Gemini 2.5 Flash for the Bear agent and the
+orchestrator, and Llama 3.3 70B from Vertex AI Model-as-a-Service for the Bull agent.
 
-  vertex  (default) Gemini 2.5 Flash for the Bear agent and orchestrator, Llama 3.3 70B
-          from Vertex AI Model-as-a-Service for the Bull agent. Requires a Google Cloud
-          project with the Vertex AI API enabled and Application Default Credentials.
-  openai  OpenAI models for all three. Requires only OPENAI_API_KEY, which makes the
-          local A2A path runnable without any Google Cloud setup.
+Vertex AI has no API key. It authenticates with Application Default Credentials against
+a Google Cloud project that has the Vertex AI API enabled, so set GOOGLE_CLOUD_PROJECT
+and run `gcloud auth application-default login` before any of the scripts here.
 
-The A2A protocol, MCP tools, and Arize AX tracing are identical either way. Only the
-model bindings change, which is the point of routing every agent through a provider
-layer rather than hardcoding a model string.
+Model ids are read from the environment so you can point an agent at a different Vertex
+model without touching the agent code.
 """
 
 import os
@@ -25,11 +23,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 # variables win over the file.
 load_dotenv(PROJECT_ROOT / ".env")
 
-MODEL_PROVIDER = os.environ.get("MODEL_PROVIDER", "vertex").strip().lower()
-
 # --- Vertex AI ---------------------------------------------------------------------
 GOOGLE_CLOUD_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
 GOOGLE_CLOUD_LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+
+BEAR_MODEL = os.environ.get("BEAR_MODEL", "gemini-2.5-flash")
+BULL_MODEL = os.environ.get("BULL_MODEL", "vertex_ai/meta/llama-3.3-70b-instruct-maas")
+ORCHESTRATOR_MODEL = os.environ.get("ORCHESTRATOR_MODEL", "gemini-2.5-flash")
 
 # --- A2A server ports ---------------------------------------------------------------
 BEAR_PORT = int(os.environ.get("BEAR_PORT", "8001"))
@@ -54,69 +54,42 @@ ORCHESTRATOR_INSTRUCTION = (
 )
 
 
-def _env_model(name: str, vertex_default: str, openai_default: str) -> str:
-    """Resolve a model id, letting an explicit env var override either provider default."""
-    return os.environ.get(
-        name, openai_default if MODEL_PROVIDER == "openai" else vertex_default
-    )
-
-
 def bear_model():
-    """Return a Pydantic AI model for the Bear agent."""
-    model_id = _env_model("BEAR_MODEL", "gemini-2.5-flash", "gpt-4.1-mini")
-    if MODEL_PROVIDER == "openai":
-        from pydantic_ai.models.openai import OpenAIChatModel
-
-        return OpenAIChatModel(model_id)
-
+    """Return the Pydantic AI model for the Bear agent."""
     from pydantic_ai.models.google import GoogleModel
     from pydantic_ai.providers.google import GoogleProvider
 
-    return GoogleModel(model_id, provider=GoogleProvider(vertexai=True))
+    return GoogleModel(BEAR_MODEL, provider=GoogleProvider(vertexai=True))
 
 
 def bull_model():
-    """Return an ADK model for the Bull agent.
+    """Return the ADK model for the Bull agent.
 
-    ADK reaches non-Gemini models through LiteLlm, which is how the same agent code runs
-    against Llama on Vertex AI or against OpenAI.
+    ADK reaches non-Gemini models through LiteLlm, which is how an ADK agent runs on
+    Llama hosted by Vertex AI.
     """
     from google.adk.models.lite_llm import LiteLlm
 
-    model_id = _env_model(
-        "BULL_MODEL", "vertex_ai/meta/llama-3.3-70b-instruct-maas", "openai/gpt-4.1-mini"
-    )
-    return LiteLlm(model_id)
+    return LiteLlm(BULL_MODEL)
 
 
-def orchestrator_model():
-    """Return an ADK model for the orchestrator.
+def orchestrator_model() -> str:
+    """Return the ADK model for the orchestrator.
 
-    ADK takes a bare string for Gemini models and a LiteLlm instance for everything else.
+    ADK takes a bare model id string for Gemini models.
     """
-    model_id = _env_model("ORCHESTRATOR_MODEL", "gemini-2.5-flash", "openai/gpt-4.1-mini")
-    if MODEL_PROVIDER == "openai":
-        from google.adk.models.lite_llm import LiteLlm
-
-        return LiteLlm(model_id)
-    return model_id
+    return ORCHESTRATOR_MODEL
 
 
 def init_vertex() -> None:
-    """Initialize Vertex AI and point LiteLLM at the same project.
-
-    A no-op when MODEL_PROVIDER is openai, so the local path needs no Google Cloud setup.
-    """
-    if MODEL_PROVIDER != "vertex":
-        return
-
+    """Initialize Vertex AI and point LiteLLM at the same project."""
     import vertexai
     from google.adk.models.lite_llm import litellm
 
     if not GOOGLE_CLOUD_PROJECT:
         raise RuntimeError(
-            "GOOGLE_CLOUD_PROJECT is required when MODEL_PROVIDER=vertex. "
-            "Set it, or set MODEL_PROVIDER=openai to run without Google Cloud."
+            "GOOGLE_CLOUD_PROJECT is required. Set it in .env or the environment, and "
+            "authenticate with `gcloud auth application-default login`."
         )
 
     os.environ["GOOGLE_CLOUD_PROJECT"] = GOOGLE_CLOUD_PROJECT

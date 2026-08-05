@@ -73,9 +73,8 @@ async def serve(app: A2AStarletteApplication, port: int) -> None:
 async def main() -> None:
     tracing.setup_tracing()
 
-    print(f"Bear Agent (Pydantic AI) -> http://127.0.0.1:{config.BEAR_PORT}")
-    print(f"Bull Agent (ADK)         -> http://127.0.0.1:{config.BULL_PORT}")
-    print(f"Model provider: {config.MODEL_PROVIDER}")
+    print(f"Bear Agent (Pydantic AI, {config.BEAR_MODEL}) -> http://127.0.0.1:{config.BEAR_PORT}")
+    print(f"Bull Agent (ADK, {config.BULL_MODEL}) -> http://127.0.0.1:{config.BULL_PORT}")
 
     await asyncio.gather(
         serve(build_bear_app(), config.BEAR_PORT),

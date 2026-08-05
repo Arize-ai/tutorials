@@ -22,6 +22,3 @@ openinference-instrumentation-pydantic-ai>=0.1.18
 opentelemetry-sdk>=1.44.0
 opentelemetry-exporter-otlp>=1.44.0
 opentelemetry-api>=1.44.0
-
-# Only needed when MODEL_PROVIDER=openai
-openai>=2.0

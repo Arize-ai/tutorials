@@ -47,15 +47,10 @@ orchestrator.py
 
 ## Prerequisites
 
-Python 3.10 or later, an [Arize AX account](https://app.arize.com/auth/join), and models
-from one of two providers.
+Python 3.10 or later and an [Arize AX account](https://app.arize.com/auth/join).
 
-**`MODEL_PROVIDER=openai`** needs only an `OPENAI_API_KEY`. Use this to run the system
-without any Google Cloud setup.
-
-**`MODEL_PROVIDER=vertex`** (the default) uses Gemini 2.5 Flash for the Bear agent and
-orchestrator and Llama 3.3 70B for the Bull agent. Vertex AI has no API key, so this path
-needs:
+The agents run on Vertex AI: Gemini 2.5 Flash for the Bear agent and orchestrator, Llama
+3.3 70B for the Bull agent. Vertex AI has no API key, so it needs:
 
 - A Google Cloud project with billing and the [Vertex AI API](https://console.cloud.google.com/flows/enableapi?apiid=aiplatform.googleapis.com) enabled
 - Application Default Credentials: `gcloud auth application-default login`
@@ -69,7 +64,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# Fill in ARIZE_SPACE_ID, ARIZE_API_KEY, and either OPENAI_API_KEY or GOOGLE_CLOUD_PROJECT
+# Fill in ARIZE_SPACE_ID, ARIZE_API_KEY, and GOOGLE_CLOUD_PROJECT
 ```
 
 ## Run it
@@ -138,7 +133,15 @@ resolves to 1.x, and then nothing imports. Install from `requirements.txt`.
 generators being finalized as the event loop closes, it happens after all work and all
 span exports are done, and the process still exits 0. It is noise, not a failure.
 
-**Verified with `MODEL_PROVIDER=openai`.** The A2A protocol, MCP tools, agent cards,
-executors, orchestrator, and Arize AX tracing were all confirmed end to end on that path.
-The Vertex model bindings and `deploy_agent_engine.py` are faithful to the Vertex API but
-were not executed, since they need a billed Google Cloud project.
+**What has and has not been run.** The A2A protocol, the MCP servers and all six tools,
+the agent cards, both executors, the orchestrator, and Arize AX tracing were confirmed end
+to end, producing 486 spans across 13 traces. That was done against a temporary model
+binding, since none of those layers depend on which model answers.
+
+The Vertex model bindings themselves were not executed: `init_vertex()`,
+`GoogleProvider(vertexai=True)`, `GoogleModel("gemini-2.5-flash")`,
+`LiteLlm("vertex_ai/meta/llama-3.3-70b-instruct-maas")`, and every line of
+`deploy_agent_engine.py`, including `agent_engines.create()` and the `GoogleAuth` flow.
+They follow the Vertex API and their imports and signatures were checked against the
+installed SDKs, but confirming they run needs a billed Google Cloud project with Llama 3.3
+accepted in Model Garden. Treat that path as reviewed, not exercised.
