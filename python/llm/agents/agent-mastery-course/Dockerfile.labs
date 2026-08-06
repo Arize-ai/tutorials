@@ -1,0 +1,16 @@
+FROM python:3.11-slim
+
+RUN pip install --no-cache-dir jupyterlab
+
+COPY requirements-labs.txt /tmp/requirements-labs.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-labs.txt
+
+WORKDIR /workspace
+
+COPY labs/ /workspace/labs/
+COPY lab-entrypoint.sh /lab-entrypoint.sh
+RUN chmod +x /lab-entrypoint.sh
+
+EXPOSE 8888
+
+ENTRYPOINT ["/lab-entrypoint.sh"]
