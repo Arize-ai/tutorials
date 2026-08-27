@@ -1,0 +1,6 @@
+arize-otel
+gradio
+openai
+openinference-instrumentation-openai
+opentelemetry-api
+pillow

@@ -1,0 +1,214 @@
+"""Gradio receipt-intake app with AX-ready image-grounded trace data."""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import io
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+import gradio as gr
+from PIL import Image
+from arize.otel import register
+from openai import OpenAI
+from openinference.instrumentation.openai import OpenAIInstrumentor
+from opentelemetry import trace
+from opentelemetry.trace import Status, StatusCode
+
+ROOT = Path(__file__).parent
+IMAGES = ROOT / "images"
+IMAGE_PATHS = sorted(IMAGES.glob("*.png"), key=lambda path: int(path.stem))
+if not IMAGE_PATHS:
+    raise RuntimeError(f"No numbered PNG images found in {IMAGES}")
+FIXTURE_BY_ID = {
+    path.stem: {"id": path.stem, "image": path.name, "scenario": "user_supplied", "expected": None}
+    for path in IMAGE_PATHS
+}
+EXTRACTION_MODEL = "gpt-5.4-mini"
+JUDGE_MODEL = "gpt-5.6-terra"  # Used when configuring the AX evaluator, not by this app.
+
+RECEIPT_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "merchant": {"type": ["string", "null"]},
+        "currency": {"type": ["string", "null"]},
+        "items": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"name": {"type": "string"}, "amount": {"type": "number"}},
+                "required": ["name", "amount"],
+            },
+        },
+        "subtotal": {"type": ["number", "null"]},
+        "tax": {"type": ["number", "null"]},
+        "tip": {"type": ["number", "null"]},
+        "total": {"type": ["number", "null"]},
+        "needs_review": {"type": "boolean"},
+    },
+    "required": ["merchant", "currency", "items", "subtotal", "tax", "tip", "total", "needs_review"],
+}
+
+
+def image_url(fixture: dict[str, Any]) -> str:
+    """Return a public URL, or a compact inline image for local runs and traces."""
+    base_url = os.environ.get("RECEIPT_IMAGE_BASE_URL")
+    if base_url:
+        return f"{base_url.rstrip('/')}/{fixture['image']}"
+
+    # Keep trace payloads manageable while still giving the OpenAI request and
+    # Arize span a rendered image that can be inspected without a public host.
+    with Image.open(IMAGES / fixture["image"]) as source:
+        image = source.convert("RGB")
+        image.thumbnail((1024, 1024))
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=78, optimize=True)
+    return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def init_tracing():
+    required = ("ARIZE_API_KEY", "ARIZE_SPACE_ID")
+    if not all(os.environ.get(name) for name in required):
+        return None
+    provider = register(
+        project_name=os.environ.get("ARIZE_PROJECT_NAME", "receipt-image-evals"),
+        space_id=os.environ["ARIZE_SPACE_ID"],
+        api_key=os.environ["ARIZE_API_KEY"],
+        batch=True,
+    )
+    OpenAIInstrumentor().instrument(tracer_provider=provider)
+    return provider.get_tracer(__name__)
+
+
+TRACER = init_tracing()
+
+
+def extraction_prompt(fixture: dict[str, Any]) -> str:
+    return f"""Extract the receipt into the requested JSON schema. Use only what is visually supported by the image.
+If a field is unclear, return null or an empty list and set needs_review to true.
+This is fixture {fixture['id']} with scenario {fixture['scenario']}."""
+
+
+def inject_error(result: dict[str, Any]) -> dict[str, Any]:
+    """Make a repeatable visual-groundedness failure for evaluator demos."""
+    wrong = dict(result)
+    wrong["merchant"] = "Harborline Imports"
+    if isinstance(wrong.get("total"), (int, float)):
+        wrong["total"] = round(wrong["total"] + 12.34, 2)
+    wrong["needs_review"] = False
+    return wrong
+
+
+def model_extract(fixture: dict[str, Any]) -> dict[str, Any]:
+    # This is useful for exercising the UI and batch path without credentials.
+    # It is not an evaluation result and must not be used to judge model quality.
+    if os.environ.get("RECEIPT_DEMO_MODE") == "1":
+        return fixture["expected"] or {
+            "merchant": None, "currency": None, "items": [], "subtotal": None,
+            "tax": None, "tip": None, "total": None, "needs_review": True,
+        }
+    if not os.environ.get("OPENAI_API_KEY"):
+        raise RuntimeError("Set OPENAI_API_KEY before extracting a receipt.")
+    client = OpenAI()
+    response = client.responses.create(
+        model=os.environ.get("RECEIPT_EXTRACTION_MODEL", EXTRACTION_MODEL),
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": extraction_prompt(fixture)},
+                    {"type": "input_image", "image_url": image_url(fixture), "detail": "high"},
+                ],
+            }
+        ],
+        text={"format": {"type": "json_schema", "name": "receipt_extraction", "strict": True, "schema": RECEIPT_SCHEMA}},
+    )
+    return json.loads(response.output_text)
+
+
+def run_fixture(fixture_id: str, add_error: bool = False) -> tuple[dict[str, Any], str]:
+    fixture = FIXTURE_BY_ID[fixture_id]
+    attrs = {
+        "openinference.span.kind": "CHAIN",
+        "input.value": json.dumps({"prompt": extraction_prompt(fixture), "image_url": image_url(fixture)}),
+        "input.mime_type": "application/json",
+        "receipt.fixture_id": fixture_id,
+        "receipt.scenario": fixture["scenario"],
+        "receipt.image.url": image_url(fixture),
+        "receipt.extraction_model": os.environ.get("RECEIPT_EXTRACTION_MODEL", EXTRACTION_MODEL),
+        "receipt.judge_model": JUDGE_MODEL,
+        "receipt.injected_error": add_error,
+    }
+    if fixture["expected"] is not None:
+        attrs["receipt.expected"] = json.dumps(fixture["expected"])
+    if TRACER is None:
+        result = model_extract(fixture)
+        return (inject_error(result) if add_error else result), "Tracing is disabled: set ARIZE_API_KEY and ARIZE_SPACE_ID."
+    with TRACER.start_as_current_span("receipt.extract", attributes=attrs) as span:
+        trace_id = format(span.get_span_context().trace_id, "032x")
+        try:
+            result = model_extract(fixture)
+            if add_error:
+                result = inject_error(result)
+            span.set_attribute("output.value", json.dumps(result))
+            span.set_attribute("output.mime_type", "application/json")
+            span.set_status(Status(StatusCode.OK))
+            return result, f"Extraction complete. Trace ID: {trace_id}"
+        except Exception as error:
+            span.set_status(Status(StatusCode.ERROR, str(error)))
+            span.record_exception(error)
+            raise
+
+
+def ui_run(fixture_id: str, add_error: bool):
+    try:
+        result, status = run_fixture(fixture_id, add_error)
+        fixture = FIXTURE_BY_ID[fixture_id]
+        expected = json.dumps(fixture["expected"], indent=2) if fixture["expected"] is not None else "No expected data supplied."
+        return str(IMAGES / fixture["image"]), json.dumps(result, indent=2), expected, status
+    except Exception as error:
+        fixture = FIXTURE_BY_ID[fixture_id]
+        expected = json.dumps(fixture["expected"], indent=2) if fixture["expected"] is not None else "No expected data supplied."
+        return str(IMAGES / fixture["image"]), "", expected, f"Error: {error}"
+
+
+def run_batch() -> None:
+    for fixture in FIXTURE_BY_ID.values():
+        result, _ = run_fixture(fixture["id"], add_error=False)
+        print(json.dumps({"fixture_id": fixture["id"], "result": result}))
+    provider = trace.get_tracer_provider()
+    if hasattr(provider, "force_flush"):
+        provider.force_flush()
+
+
+def build_app():
+    choices = [(f"Image {f['id']}", f["id"]) for f in FIXTURE_BY_ID.values()]
+    with gr.Blocks(title="Receipt Image Evals") as app:
+        gr.Markdown("# Receipt image evaluation playground\nExtract fictional receipts, trace the image reference to AX, and use the deterministic error to exercise a visual-groundedness judge.")
+        with gr.Row():
+            fixture = gr.Dropdown(choices=choices, value=choices[0][1], label="Receipt fixture")
+            add_error = gr.Checkbox(label="Inject visual-groundedness error", value=False)
+            run = gr.Button("Extract and trace", variant="primary")
+        with gr.Row():
+            image = gr.Image(label="Selected receipt", type="filepath")
+            output = gr.Code(label="Extraction result", language="json")
+            expected = gr.Code(label="Expected fixture data", language="json")
+        status = gr.Markdown()
+        run.click(ui_run, inputs=[fixture, add_error], outputs=[image, output, expected, status])
+        fixture.change(lambda fixture_id: str(IMAGES / FIXTURE_BY_ID[fixture_id]["image"]), fixture, image)
+    return app
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--batch", action="store_true", help="Trace every numbered image, then exit.")
+    args = parser.parse_args()
+    if args.batch:
+        run_batch()
+    else:
+        build_app().launch(server_name=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"), server_port=int(os.environ.get("PORT", "7860")))
