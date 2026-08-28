@@ -61,6 +61,10 @@ html, body { background: #f7f9fc !important; color-scheme: light !important; }
 #process-expense { min-height: 44px !important; align-self: end; }
 #process-expense button { min-height: 44px !important; }
 #expense-record, #expense-record textarea { background: #fbfdff !important; color: #4a6881 !important; }
+#expense-record label, #receipt-selector label { color: #426b8f !important; font-weight: 700 !important; opacity: 1 !important; }
+.gradio-container label, .gradio-container .label-wrap, .gradio-container .label-wrap span { color: #426b8f !important; font-weight: 700 !important; opacity: 1 !important; }
+#receipt-selector input { color: #35536f !important; }
+#receipt-selector svg { color: #426b8f !important; fill: #426b8f !important; stroke: #426b8f !important; opacity: 1 !important; }
 .section-title { font-size: 22px; font-weight: 700; color: #35536f; margin: 8px 0 6px; text-align: center; }
 .section-copy { color: #718096; font-size: 14px; margin-bottom: 18px; text-align: center; }
 .queue-status { color: #5f7b94; font-size: 13px; font-weight: 600; margin: -8px 0 16px; text-align: center; }
@@ -271,7 +275,7 @@ def build_app():
         processed = gr.State(initial_processed)
         queue = gr.HTML(queue_status(initial_processed))
         with gr.Row():
-            fixture = gr.Dropdown(choices=choices, value=choices[0][1], label="Submitted receipt", scale=3)
+            fixture = gr.Dropdown(choices=choices, value=choices[0][1], label="Submitted receipt", scale=3, elem_id="receipt-selector")
             run = gr.Button("Process expense", variant="primary", scale=1, elem_id="process-expense")
         with gr.Row():
             image = gr.Image(value=str(IMAGES / FIXTURE_BY_ID[choices[0][1]]["image"]), label="Receipt document", type="filepath", height=560, scale=1)
