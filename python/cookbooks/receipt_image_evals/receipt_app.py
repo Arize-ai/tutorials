@@ -61,8 +61,8 @@ html, body { background: #f7f9fc !important; color-scheme: light !important; }
 #process-expense { min-height: 44px !important; align-self: end; }
 #process-expense button { min-height: 44px !important; }
 #expense-record, #expense-record textarea { background: #fbfdff !important; color: #4a6881 !important; }
-#expense-record label, #receipt-selector label { color: #426b8f !important; font-weight: 700 !important; opacity: 1 !important; }
-.gradio-container label, .gradio-container .label-wrap, .gradio-container .label-wrap span { color: #426b8f !important; font-weight: 700 !important; opacity: 1 !important; }
+#expense-record label, #receipt-selector label { color: #1f2937 !important; font-weight: 700 !important; opacity: 1 !important; }
+.gradio-container label, .gradio-container .label-wrap, .gradio-container .label-wrap span { color: #1f2937 !important; font-weight: 700 !important; opacity: 1 !important; }
 #receipt-selector input { color: #35536f !important; }
 #receipt-selector svg { color: #426b8f !important; fill: #426b8f !important; stroke: #426b8f !important; opacity: 1 !important; }
 .section-title { font-size: 22px; font-weight: 700; color: #35536f; margin: 8px 0 6px; text-align: center; }
