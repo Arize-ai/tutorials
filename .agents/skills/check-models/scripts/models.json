@@ -5,6 +5,8 @@
 
   "openai": {
     "flagship": "gpt-5.6-sol",
+    "terra": "gpt-5.6-terra",
+    "luna": "gpt-5.6-luna",
     "pro": "gpt-5.5-pro",
     "mini": "gpt-5.4-mini",
     "nano": "gpt-5.4-nano",
