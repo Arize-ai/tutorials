@@ -230,7 +230,7 @@ def ui_run(fixture_id: str, processed_ids: list[str]):
         fixture = FIXTURE_BY_ID[fixture_id]
         updated_processed = list(dict.fromkeys([*processed_ids, fixture_id]))
         return (
-            str(IMAGES / fixture["image"]),
+            image_url(fixture),
             expense_summary(result),
             json.dumps(result, indent=2),
             f"<div class=\"trace-status\">{escape(status)} · Receipt moved to Processed.</div>",
@@ -241,7 +241,7 @@ def ui_run(fixture_id: str, processed_ids: list[str]):
     except Exception as error:
         fixture = FIXTURE_BY_ID[fixture_id]
         return (
-            str(IMAGES / fixture["image"]),
+            image_url(fixture),
             "",
             "",
             f"<div class=\"trace-status\">Processing failed: {escape(str(error))}</div>",
@@ -274,14 +274,14 @@ def build_app():
             with gr.Column(scale=1):
                 run = gr.Button("Process expense", variant="primary", elem_id="process-expense")
         with gr.Row():
-            image = gr.Image(value=str(IMAGES / FIXTURE_BY_ID[choices[0][1]]["image"]), show_label=False, buttons=[], type="filepath", height=560, scale=1)
+            image = gr.Image(value=image_url(FIXTURE_BY_ID[choices[0][1]]), show_label=False, buttons=[], type="filepath", height=560, scale=1)
             with gr.Column(scale=1):
                 summary = gr.HTML("<div class=\"expense-summary\"><h3>Expense details</h3><div class=\"section-copy\">Process a receipt to create an expense record.</div></div>")
                 gr.HTML("<div class=\"field-label\">Structured expense record</div>")
                 output = gr.Textbox(lines=18, interactive=False, show_label=False, elem_id="expense-record")
         status = gr.HTML()
         run.click(ui_run, inputs=[fixture, processed], outputs=[image, summary, output, status, queue, fixture, processed])
-        fixture.change(lambda fixture_id: str(IMAGES / FIXTURE_BY_ID[fixture_id]["image"]), fixture, image)
+        fixture.change(lambda fixture_id: image_url(FIXTURE_BY_ID[fixture_id]), fixture, image)
     return app
 
 
