@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
 import gradio as gr
 from openai import OpenAI
 
@@ -24,6 +25,8 @@ from ui import (
 )
 
 ROOT = Path(__file__).parent
+# Load this tutorial's local configuration before initializing tracing or OpenAI.
+load_dotenv(ROOT / ".env")
 IMAGES = ROOT / "images"
 DEFAULT_RECEIPT_IMAGE_BASE_URL = (
     "https://raw.githubusercontent.com/Arize-ai/tutorials/"

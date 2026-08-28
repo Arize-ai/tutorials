@@ -4,3 +4,4 @@ openai
 openinference-instrumentation
 openinference-instrumentation-openai
 opentelemetry-api
+python-dotenv

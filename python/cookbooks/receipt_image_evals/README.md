@@ -20,13 +20,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# Edit .env to add your API keys, then load it into the shell:
-set -a
-source .env
-set +a
+# Edit .env to add your API keys.
 
 python receipt_app.py
 ```
+
+The app loads its local `.env` file on startup. Restart it after changing a setting.
 
 Open the local URL printed by Gradio, select a submitted receipt from the expense inbox, and choose **Process expense**. The page shows the receipt document, an expense summary, and the structured expense record. Processed receipts move from **Pending** to **Processed** in the in-memory queue; refresh the page to reset it.
 
