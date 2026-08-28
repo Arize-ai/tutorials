@@ -1,17 +1,14 @@
 # Receipt Image Evals
 
-A small Gradio application for testing visual-grounded receipt extraction and preparing image-bearing spans for an Arize AX LLM-as-a-judge evaluator. It discovers numbered PNG images from `images/`.
+A demo application to show how to use LLM-as-a-judge evals with images. This example app is for the [Evaluate Receipt Agents with an Image Judge guide](https://arize.com/docs/ax/cookbooks/evaluate/evaluate-receipt-agents-with-image-judge).
 
-The extraction model is `gpt-5.4-mini`. Configure `gpt-5.6-luna` as the stronger image-aware judge in AX; the app records that intended judge model on every span but does not make judge calls itself. Set `RECEIPT_JUDGE_MODEL` if your AX AI integration exposes a different judge model.
+This is an example receipt processing application that uses a cheaper model to extract information from the receipt, then a better model for evals to ensure the extraction is working well.
 
 ## Prerequisites
 
 - Python 3.10 or later
 - An OpenAI API key with access to `gpt-5.4-mini`
 - An Arize AX API key and Space ID
-- HTTPS hosting for the `images/` directory that both OpenAI and Arize AX can fetch
-
-The last requirement is deliberate. `RECEIPT_IMAGE_BASE_URL` is an externally fetchable image reference, rather than a large base64 payload in span attributes. The app defaults to the raw GitHub URL for its fictional tutorial images, and you can override it with your own approved host. Before publishing an evaluator, confirm in AX that the receipt image field is selectable and rendered from the URL you configured.
 
 ## Run it
 
@@ -38,31 +35,8 @@ To trace every receipt without launching the UI:
 python receipt_app.py --batch
 ```
 
-The app prints one JSON result per fixture. Browse the project named by `ARIZE_PROJECT_NAME` in AX to open its individual traces.
+The app prints one JSON result per example image. Browse the project named by `ARIZE_PROJECT_NAME` in AX to open its individual traces.
 
-## What is traced
+## Evals
 
-The app registers `arize-otel`, enables OpenInference's OpenAI instrumentor, and creates a `receipt.extract` span. It records:
-
-- the image URL in the input value, `receipt.image.url`, and the OpenInference image-message field
-- fixture ID and scenario
-- extraction output
-- extraction model and intended judge model
-
-This makes the data available for a span-level evaluator mapping. Map `receipt_image` to `attributes.input.value` and `extraction` to `attributes.output.value`. The input contains the raw GitHub image URL, so AX and the judge can fetch an image rather than process an embedded base64 payload.
-
-## Evaluator labels
-
-Create a categorical **span-level** LLM-as-a-judge evaluator in AX with these labels:
-
-- `grounded`: the extraction is supported by the visible receipt.
-- `not_grounded`: it asserts a merchant, amount, or line item not supported by the image.
-- `needs_review`: the image is too degraded or ambiguous to assess confidently.
-
-Use `gpt-5.6-luna` for the judge and preview it on clear and degraded receipts. Disable function calling for this evaluator and require its explanation to be valid JSON with `evaluated_extraction` and `judge_result` fields. This keeps the extraction JSON and the judge's label/reason together in AX. Then attach it to a continuous evaluation task. The stronger judge can tell you whether a cheaper extraction model is sufficient only after you calibrate its labels against human annotations from your receipts.
-
-## Cost, privacy, and images
-
-Image-token cost changes with image resolution and the requested detail level (`high` in this example). Measure quality and cost on representative images before increasing resolution or switching models. Do not send customer receipts to a public image host without an approved retention and access policy.
-
-Place images in `images/` as numbered PNG files, beginning with `1.png`. The app discovers them automatically. Public GitHub raw URLs are appropriate for these fictional examples only; use approved private object storage and suitably long-lived signed URLs for real receipts.
+Follow the [guide](https://arize.com/docs/ax/cookbooks/evaluate/evaluate-receipt-agents-with-image-judge) to set up the eval. AX runs the stronger judge model through the AI integration you configure in the AX UI; the app traces only the extraction model.
