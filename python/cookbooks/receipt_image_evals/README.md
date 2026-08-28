@@ -30,7 +30,7 @@ set +a
 python receipt_app.py
 ```
 
-Open the local URL printed by Gradio, select a submitted receipt from the expense inbox, and choose **Process expense**. The page shows the receipt document, an expense summary, and the structured expense record.
+Open the local URL printed by Gradio, select a submitted receipt from the expense inbox, and choose **Process expense**. The page shows the receipt document, an expense summary, and the structured expense record. Processed receipts move from **Pending** to **Processed** in the in-memory queue; refresh the page to reset it.
 
 To trace every receipt without launching the UI:
 

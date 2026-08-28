@@ -34,24 +34,26 @@ EXTRACTION_MODEL = "gpt-5.4-mini"
 JUDGE_MODEL = os.environ.get("RECEIPT_JUDGE_MODEL", "gpt-5.6-luna")
 
 APP_CSS = """
-.gradio-container { max-width: 1280px !important; background: #f8fafc; }
-.app-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0 28px; }
-.brand { font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
-.brand span { color: #2563eb; }
-.eyebrow { color: #64748b; font-size: 13px; margin-top: 3px; }
-.connection { background: #dcfce7; color: #166534; border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 600; }
-.workspace { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
-.section-title { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-.section-copy { color: #64748b; font-size: 13px; margin-bottom: 16px; }
-.expense-summary { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #fff; }
-.expense-summary h3 { margin: 0 0 8px; color: #0f172a; font-size: 18px; }
-.expense-total { font-size: 28px; font-weight: 700; color: #0f172a; margin: 4px 0 14px; }
-.expense-meta { display: flex; gap: 24px; color: #475569; font-size: 13px; }
-.expense-meta strong { display: block; color: #0f172a; font-size: 14px; }
-.review-badge { display: inline-block; margin-top: 14px; padding: 5px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-.review-ok { background: #dcfce7; color: #166534; }
-.review-needed { background: #fef3c7; color: #92400e; }
-.trace-status { color: #475569; font-size: 13px; padding-top: 12px; }
+.gradio-container { max-width: 1120px !important; background: #f7f9fc; padding-top: 24px !important; }
+.app-header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 14px 0 30px; }
+.brand { font-size: 28px; font-weight: 700; color: #24405f; letter-spacing: -0.03em; }
+.brand span { color: #4f7cac; }
+.eyebrow { color: #718096; font-size: 14px; margin-top: 4px; }
+.connection { background: #eaf2f8; color: #426b8f; border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 600; }
+.workspace { background: #ffffff; border: 1px solid #e4ebf2; border-radius: 18px; padding: 28px; box-shadow: 0 8px 30px rgba(68, 96, 124, .08); text-align: center; }
+.section-title { font-size: 20px; font-weight: 700; color: #35536f; margin-bottom: 6px; }
+.section-copy { color: #718096; font-size: 14px; margin-bottom: 18px; }
+.queue-status { color: #5f7b94; font-size: 13px; font-weight: 600; margin: -8px 0 16px; }
+.expense-summary { border: 1px solid #e4ebf2; border-radius: 14px; padding: 22px; background: #fbfdff; text-align: center; }
+.expense-summary h3 { margin: 0 0 8px; color: #35536f; font-size: 20px; }
+.expense-total { font-size: 30px; font-weight: 700; color: #426b8f; margin: 4px 0 18px; }
+.expense-meta { display: flex; justify-content: center; gap: 30px; color: #718096; font-size: 13px; }
+.expense-meta strong { display: block; color: #4a6881; font-size: 14px; margin-top: 3px; }
+.review-badge { display: inline-block; margin-top: 18px; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.review-ok { background: #e7f4ed; color: #4b7d60; }
+.review-needed { background: #fff3df; color: #a36f32; }
+.trace-status { color: #6a849a; font-size: 13px; padding-top: 16px; text-align: center; }
+.gr-button-primary { background: #5f87ae !important; border-color: #5f87ae !important; }
 """
 
 RECEIPT_SCHEMA = {
@@ -190,14 +192,46 @@ def expense_summary(result: dict[str, Any]) -> str:
     """
 
 
-def ui_run(fixture_id: str):
+def receipt_choices(processed_ids: list[str]) -> list[tuple[str, str]]:
+    processed = set(processed_ids)
+    return [
+        (f"Receipt #{int(fixture_id):03d} · {'Processed' if fixture_id in processed else 'Pending'}", fixture_id)
+        for fixture_id in FIXTURE_BY_ID
+    ]
+
+
+def queue_status(processed_ids: list[str]) -> str:
+    processed_count = len(processed_ids)
+    pending_count = len(FIXTURE_BY_ID) - processed_count
+    return f"<div class=\"queue-status\">{pending_count} pending · {processed_count} processed</div>"
+
+
+def ui_run(fixture_id: str, processed_ids: list[str]):
+    processed_ids = processed_ids or []
     try:
         result, status = run_fixture(fixture_id)
         fixture = FIXTURE_BY_ID[fixture_id]
-        return str(IMAGES / fixture["image"]), expense_summary(result), json.dumps(result, indent=2), f"<div class=\"trace-status\">{escape(status)}</div>"
+        updated_processed = list(dict.fromkeys([*processed_ids, fixture_id]))
+        return (
+            str(IMAGES / fixture["image"]),
+            expense_summary(result),
+            json.dumps(result, indent=2),
+            f"<div class=\"trace-status\">{escape(status)} · Receipt moved to Processed.</div>",
+            queue_status(updated_processed),
+            gr.Dropdown(choices=receipt_choices(updated_processed), value=fixture_id),
+            updated_processed,
+        )
     except Exception as error:
         fixture = FIXTURE_BY_ID[fixture_id]
-        return str(IMAGES / fixture["image"]), "", "", f"<div class=\"trace-status\">Processing failed: {escape(str(error))}</div>"
+        return (
+            str(IMAGES / fixture["image"]),
+            "",
+            "",
+            f"<div class=\"trace-status\">Processing failed: {escape(str(error))}</div>",
+            queue_status(processed_ids),
+            gr.Dropdown(choices=receipt_choices(processed_ids), value=fixture_id),
+            processed_ids,
+        )
 
 
 def run_batch() -> None:
@@ -210,7 +244,8 @@ def run_batch() -> None:
 
 
 def build_app():
-    choices = [(f"Receipt #{int(f['id']):03d} · Pending", f["id"]) for f in FIXTURE_BY_ID.values()]
+    initial_processed: list[str] = []
+    choices = receipt_choices(initial_processed)
     with gr.Blocks(title="Expense Inbox") as app:
         gr.HTML("""
         <div class="app-header">
@@ -220,6 +255,8 @@ def build_app():
         """)
         with gr.Group(elem_classes="workspace"):
             gr.HTML("<div class=\"section-title\">Expense inbox</div><div class=\"section-copy\">Select a submitted receipt and create a structured expense record.</div>")
+            processed = gr.State(initial_processed)
+            queue = gr.HTML(queue_status(initial_processed))
             with gr.Row():
                 fixture = gr.Dropdown(choices=choices, value=choices[0][1], label="Submitted receipt", scale=3)
                 run = gr.Button("Process expense", variant="primary", scale=1)
@@ -229,7 +266,7 @@ def build_app():
                     summary = gr.HTML("<div class=\"expense-summary\"><h3>Expense details</h3><div class=\"section-copy\">Process a receipt to create an expense record.</div></div>")
                     output = gr.Code(label="Structured expense record", language="json", lines=18)
             status = gr.HTML()
-        run.click(ui_run, inputs=fixture, outputs=[image, summary, output, status])
+        run.click(ui_run, inputs=[fixture, processed], outputs=[image, summary, output, status, queue, fixture, processed])
         fixture.change(lambda fixture_id: str(IMAGES / FIXTURE_BY_ID[fixture_id]["image"]), fixture, image)
     return app
 
