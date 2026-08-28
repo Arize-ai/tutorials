@@ -21,13 +21,11 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-export OPENAI_API_KEY="..."
-export ARIZE_API_KEY="..."
-export ARIZE_SPACE_ID="..."
-export ARIZE_PROJECT_NAME="receipt-image-evals"
-# Public synthetic examples can use raw GitHub URLs. Replace the branch with
-# main after the companion pull request is merged.
-export RECEIPT_IMAGE_BASE_URL="https://raw.githubusercontent.com/Arize-ai/tutorials/codex/receipt-image-evals-url-input/python/cookbooks/receipt_image_evals/images"
+cp .env.example .env
+# Edit .env to add your API keys, then load it into the shell:
+set -a
+source .env
+set +a
 
 python receipt_app.py
 ```
