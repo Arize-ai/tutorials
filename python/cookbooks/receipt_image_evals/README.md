@@ -2,7 +2,7 @@
 
 A small Gradio application for testing visual-grounded receipt extraction and preparing image-bearing spans for an Arize AX LLM-as-a-judge evaluator. It discovers numbered PNG images from `images/`.
 
-The extraction model is `gpt-5.4-mini`. Configure `gpt-5.6-terra` as the stronger image-aware judge in AX; the app records that intended judge model on every span but does not make judge calls itself.
+The extraction model is `gpt-5.4-mini`. Configure `gpt-5.6-luna` as the stronger image-aware judge in AX; the app records that intended judge model on every span but does not make judge calls itself. Set `RECEIPT_JUDGE_MODEL` if your AX AI integration exposes a different judge model.
 
 ## Prerequisites
 
@@ -25,7 +25,9 @@ export OPENAI_API_KEY="..."
 export ARIZE_API_KEY="..."
 export ARIZE_SPACE_ID="..."
 export ARIZE_PROJECT_NAME="receipt-image-evals"
-export RECEIPT_IMAGE_BASE_URL="https://your-public-host/receipt-images"
+# Public synthetic examples can use raw GitHub URLs. Replace the branch with
+# main after the companion pull request is merged.
+export RECEIPT_IMAGE_BASE_URL="https://raw.githubusercontent.com/Arize-ai/tutorials/codex/receipt-image-evals-url-input/python/cookbooks/receipt_image_evals/images"
 
 python receipt_app.py
 ```
@@ -46,12 +48,12 @@ For an offline UI or batch smoke test, set `RECEIPT_DEMO_MODE=1`. This returns f
 
 The app registers `arize-otel`, enables OpenInference's OpenAI instrumentor, and creates a `receipt.extract` span. It records:
 
-- the image URL in the input value and `receipt.image.url`
+- the image URL in the input value, `receipt.image.url`, and the OpenInference image-message field
 - fixture ID and scenario
 - expected structured data and extraction output
 - extraction model, intended judge model, and injected-error flag
 
-This makes the data available for a span-level evaluator mapping. For the visual-groundedness prompt, map the receipt image reference to `{receipt_image}`, the output JSON to `{extraction}`, and the scenario to `{scenario}`.
+This makes the data available for a span-level evaluator mapping. Map `receipt_image` to `attributes.input.value` and `extraction` to `attributes.output.value`. The input contains the raw GitHub image URL, so AX and the judge can fetch an image rather than process an embedded base64 payload.
 
 ## Evaluator labels
 
@@ -61,10 +63,10 @@ Create a categorical **span-level** LLM-as-a-judge evaluator in AX with these la
 - `not_grounded`: it asserts a merchant, amount, or line item not supported by the image.
 - `needs_review`: the image is too degraded or ambiguous to assess confidently.
 
-Use `gpt-5.6-terra` for the judge and start by previewing it on one standard run, one injected-error run, and one degraded fixture. Then attach it to a continuous evaluation task. The stronger judge can tell you whether a cheaper extraction model is sufficient only after you calibrate its labels against human annotations from your receipts.
+Use `gpt-5.6-luna` for the judge and start by previewing it on one standard run, one injected-error run, and one degraded fixture. Disable function calling for this evaluator and require its explanation to be valid JSON with `evaluated_extraction` and `judge_result` fields. This keeps the extraction JSON and the judge's label/reason together in AX. Then attach it to a continuous evaluation task. The stronger judge can tell you whether a cheaper extraction model is sufficient only after you calibrate its labels against human annotations from your receipts.
 
 ## Cost, privacy, and images
 
 Image-token cost changes with image resolution and the requested detail level (`high` in this example). Measure quality and cost on representative images before increasing resolution or switching models. Do not send customer receipts to a public image host without an approved retention and access policy.
 
-Place images in `images/` as numbered PNG files, beginning with `1.png`. The app discovers them automatically.
+Place images in `images/` as numbered PNG files, beginning with `1.png`. The app discovers them automatically. Public GitHub raw URLs are appropriate for these fictional examples only; use approved private object storage and suitably long-lived signed URLs for real receipts.

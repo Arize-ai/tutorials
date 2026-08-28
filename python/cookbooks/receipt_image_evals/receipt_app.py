@@ -28,7 +28,9 @@ FIXTURE_BY_ID = {
     for path in IMAGE_PATHS
 }
 EXTRACTION_MODEL = "gpt-5.4-mini"
-JUDGE_MODEL = "gpt-5.6-terra"  # Used when configuring the AX evaluator, not by this app.
+# Used when configuring the AX evaluator, not by this app. Set this to the
+# model exposed by the selected AX AI integration.
+JUDGE_MODEL = os.environ.get("RECEIPT_JUDGE_MODEL", "gpt-5.6-luna")
 
 RECEIPT_SCHEMA = {
     "type": "object",
