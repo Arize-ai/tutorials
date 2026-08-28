@@ -11,7 +11,7 @@ The extraction model is `gpt-5.4-mini`. Configure `gpt-5.6-luna` as the stronger
 - An Arize AX API key and Space ID
 - HTTPS hosting for the `images/` directory that both OpenAI and Arize AX can fetch
 
-The last requirement is deliberate. `RECEIPT_IMAGE_BASE_URL` is an externally fetchable image reference, rather than a large base64 payload in span attributes. For a local UI-only preview, the PNG files still load from disk. Before publishing an evaluator, confirm in AX that the receipt image field is selectable and rendered from the URL you configured.
+The last requirement is deliberate. `RECEIPT_IMAGE_BASE_URL` is an externally fetchable image reference, rather than a large base64 payload in span attributes. The app defaults to the raw GitHub URL for its fictional tutorial images, and you can override it with your own approved host. Before publishing an evaluator, confirm in AX that the receipt image field is selectable and rendered from the URL you configured.
 
 ## Run it
 

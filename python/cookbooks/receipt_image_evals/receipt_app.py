@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
-import io
 import json
 import os
 from html import escape
@@ -12,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 import gradio as gr
-from PIL import Image
 from arize.otel import register
 from openai import OpenAI
 from openinference.instrumentation.openai import OpenAIInstrumentor
@@ -21,6 +18,10 @@ from opentelemetry.trace import Status, StatusCode
 
 ROOT = Path(__file__).parent
 IMAGES = ROOT / "images"
+DEFAULT_RECEIPT_IMAGE_BASE_URL = (
+    "https://raw.githubusercontent.com/Arize-ai/tutorials/"
+    "codex/receipt-image-evals-url-input/python/cookbooks/receipt_image_evals/images"
+)
 IMAGE_PATHS = sorted(IMAGES.glob("*.png"), key=lambda path: int(path.stem))
 if not IMAGE_PATHS:
     raise RuntimeError(f"No numbered PNG images found in {IMAGES}")
@@ -108,19 +109,9 @@ RECEIPT_SCHEMA = {
 
 
 def image_url(fixture: dict[str, Any]) -> str:
-    """Return a public URL, or a compact inline image for local runs and traces."""
-    base_url = os.environ.get("RECEIPT_IMAGE_BASE_URL")
-    if base_url:
-        return f"{base_url.rstrip('/')}/{fixture['image']}"
-
-    # Keep trace payloads manageable while still giving the OpenAI request and
-    # Arize span a rendered image that can be inspected without a public host.
-    with Image.open(IMAGES / fixture["image"]) as source:
-        image = source.convert("RGB")
-        image.thumbnail((1024, 1024))
-        buffer = io.BytesIO()
-        image.save(buffer, format="JPEG", quality=78, optimize=True)
-    return "data:image/jpeg;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+    """Return a fetchable image URL; traces never contain base64 image data."""
+    base_url = os.environ.get("RECEIPT_IMAGE_BASE_URL") or DEFAULT_RECEIPT_IMAGE_BASE_URL
+    return f"{base_url.rstrip('/')}/{fixture['image']}"
 
 
 def init_tracing():
