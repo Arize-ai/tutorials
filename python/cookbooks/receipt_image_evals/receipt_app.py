@@ -107,13 +107,6 @@ def inject_error(result: dict[str, Any]) -> dict[str, Any]:
 
 
 def model_extract(fixture: dict[str, Any]) -> dict[str, Any]:
-    # This is useful for exercising the UI and batch path without credentials.
-    # It is not an evaluation result and must not be used to judge model quality.
-    if os.environ.get("RECEIPT_DEMO_MODE") == "1":
-        return fixture["expected"] or {
-            "merchant": None, "currency": None, "items": [], "subtotal": None,
-            "tax": None, "tip": None, "total": None, "needs_review": True,
-        }
     if not os.environ.get("OPENAI_API_KEY"):
         raise RuntimeError("Set OPENAI_API_KEY before extracting a receipt.")
     client = OpenAI()

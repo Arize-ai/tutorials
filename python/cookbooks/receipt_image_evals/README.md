@@ -40,8 +40,6 @@ python receipt_app.py --batch
 
 The app prints one JSON result per fixture. Browse the project named by `ARIZE_PROJECT_NAME` in AX to open its individual traces.
 
-For an offline UI or batch smoke test, set `RECEIPT_DEMO_MODE=1`. This returns fixture expected data instead of calling the extraction model, so it is useful for checking the app but cannot measure model quality.
-
 ## What is traced
 
 The app registers `arize-otel`, enables OpenInference's OpenAI instrumentor, and creates a `receipt.extract` span. It records:
