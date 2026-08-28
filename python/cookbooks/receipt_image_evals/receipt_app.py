@@ -68,10 +68,12 @@ html, body { background: #f7f9fc !important; color-scheme: light !important; }
 .section-title { font-size: 22px; font-weight: 700; color: #35536f; margin: 8px 0 6px; text-align: center; }
 .section-copy { color: #718096; font-size: 14px; margin-bottom: 18px; text-align: center; }
 .queue-status { color: #5f7b94; font-size: 13px; font-weight: 600; margin: -8px 0 16px; text-align: center; }
+.field-label { color: #1f2937; font-size: 14px; font-weight: 700; margin: 0 0 7px; text-align: left; }
 .expense-summary { border: 1px solid #e4ebf2; border-radius: 14px; padding: 22px; background: #fbfdff; text-align: center; }
 .expense-summary h3 { margin: 0 0 8px; color: #35536f; font-size: 20px; }
 .expense-total { font-size: 30px; font-weight: 700; color: #426b8f; margin: 4px 0 18px; }
-.expense-meta { display: flex; justify-content: center; gap: 30px; color: #718096; font-size: 13px; }
+.expense-meta { display: flex; justify-content: center; gap: 30px; color: #1f2937; font-size: 13px; }
+.expense-meta span { color: #1f2937 !important; font-weight: 600; }
 .expense-meta strong { display: block; color: #4a6881; font-size: 14px; margin-top: 3px; }
 .review-badge { display: inline-block; margin-top: 18px; padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
 .review-ok { background: #e7f4ed; color: #4b7d60; }
@@ -275,13 +277,17 @@ def build_app():
         processed = gr.State(initial_processed)
         queue = gr.HTML(queue_status(initial_processed))
         with gr.Row():
-            fixture = gr.Dropdown(choices=choices, value=choices[0][1], label="Submitted receipt", scale=3, elem_id="receipt-selector")
-            run = gr.Button("Process expense", variant="primary", scale=1, elem_id="process-expense")
+            with gr.Column(scale=3):
+                gr.HTML("<div class=\"field-label\">Submitted receipt</div>")
+                fixture = gr.Dropdown(choices=choices, value=choices[0][1], show_label=False, elem_id="receipt-selector")
+            with gr.Column(scale=1):
+                run = gr.Button("Process expense", variant="primary", elem_id="process-expense")
         with gr.Row():
             image = gr.Image(value=str(IMAGES / FIXTURE_BY_ID[choices[0][1]]["image"]), label="Receipt document", type="filepath", height=560, scale=1)
             with gr.Column(scale=1):
                 summary = gr.HTML("<div class=\"expense-summary\"><h3>Expense details</h3><div class=\"section-copy\">Process a receipt to create an expense record.</div></div>")
-                output = gr.Textbox(label="Structured expense record", lines=18, interactive=False, elem_id="expense-record")
+                gr.HTML("<div class=\"field-label\">Structured expense record</div>")
+                output = gr.Textbox(lines=18, interactive=False, show_label=False, elem_id="expense-record")
         status = gr.HTML()
         run.click(ui_run, inputs=[fixture, processed], outputs=[image, summary, output, status, queue, fixture, processed])
         fixture.change(lambda fixture_id: str(IMAGES / FIXTURE_BY_ID[fixture_id]["image"]), fixture, image)
