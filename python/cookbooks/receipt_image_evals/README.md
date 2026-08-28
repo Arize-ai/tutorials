@@ -39,4 +39,13 @@ The app prints one JSON result per example image. Browse the project named by `A
 
 ## Evals
 
-Follow the [guide](https://arize.com/docs/ax/cookbooks/evaluate/evaluate-receipt-agents-with-image-judge) to set up the eval. AX runs the stronger judge model through the AI integration you configure in the AX UI; the app traces only the extraction model.
+Follow the [guide](https://arize.com/docs/ax/cookbooks/evaluate/evaluate-receipt-agents-with-image-judge) to understand the visual-groundedness evaluator. AX runs the stronger judge model through the AI integration you configure in the AX UI; the app traces only the extraction model.
+
+To create the evaluator and its continuous task with the AX CLI, configure an AI integration in AX, then set its ID and run:
+
+```bash
+export ARIZE_AI_INTEGRATION_ID="your-ax-ai-integration-id"
+./setup_evaluator.sh
+```
+
+The script uses `gpt-5.6-luna` by default. Override `RECEIPT_JUDGE_MODEL` when your AX AI integration exposes a different judge model. It is safe to rerun: existing evaluator and task names are reused; an AI integration ID is required only when it needs to create the evaluator.
