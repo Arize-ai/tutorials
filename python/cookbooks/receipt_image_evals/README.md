@@ -9,6 +9,7 @@ This is an example receipt processing application that uses a cheaper model to e
 - Python 3.10 or later
 - An OpenAI API key with access to `gpt-5.4-mini`
 - An Arize AX API key and Space ID
+- The [AX CLI](https://arize.com/docs/ax/api-and-sdks/ax-cli) and `jq` to run the evaluator setup script
 
 ## Run it
 

@@ -4,6 +4,9 @@ set -euo pipefail
 
 : "${ARIZE_SPACE_ID:?Set ARIZE_SPACE_ID to the target AX space.}"
 
+command -v ax >/dev/null || { echo "The AX CLI must be installed." >&2; exit 1; }
+command -v jq >/dev/null || { echo "jq must be installed." >&2; exit 1; }
+
 PROJECT_NAME="${ARIZE_PROJECT_NAME:-receipt-image-evals}"
 JUDGE_MODEL="${RECEIPT_JUDGE_MODEL:-gpt-5.6-luna}"
 EVALUATOR_NAME="Receipt Visual Groundedness"
@@ -11,31 +14,13 @@ EVALUATOR_COLUMN="receipt_visual_groundedness"
 TASK_NAME="Receipt Visual Groundedness Monitor"
 
 read_json_id() {
-  python3 -c '
-import json
-import sys
-
-data = json.load(sys.stdin)
-if isinstance(data, dict):
-    print(data["id"])
-else:
-    raise SystemExit("Expected an AX resource object with an id field.")
-'
+  jq -er '.id'
 }
 
 find_task_id() {
-  python3 -c '
-import json
-import sys
-
-name = sys.argv[1]
-data = json.load(sys.stdin)
-tasks = data.get("tasks", data.get("items", data)) if isinstance(data, dict) else data
-for task in tasks:
-    if task.get("name") == name:
-        print(task["id"])
-        break
-' "$TASK_NAME"
+  jq -er --arg name "$TASK_NAME" '
+    (.tasks // .items // [])[] | select(.name == $name) | .id
+  ' || true
 }
 
 if evaluator_json="$(ax evaluators get "$EVALUATOR_NAME" --space "$ARIZE_SPACE_ID" --output json 2>/dev/null)"; then
@@ -88,20 +73,14 @@ if [[ -n "$TASK_ID" ]]; then
   exit 0
 fi
 
-EVALUATORS="$(python3 - "$EVALUATOR_ID" <<'PY'
-import json
-import sys
-
-print(json.dumps([{
-    "evaluator_id": sys.argv[1],
-    "query_filter": "span_kind = 'CHAIN'",
-    "column_mappings": {
-        "receipt_image": "attributes.input.value",
-        "extraction": "attributes.output.value",
-    },
-}]))
-PY
-)"
+EVALUATORS="$(jq -nc --arg evaluator_id "$EVALUATOR_ID" '[{
+  evaluator_id: $evaluator_id,
+  query_filter: "span_kind = '\''CHAIN'\''",
+  column_mappings: {
+    receipt_image: "attributes.input.value",
+    extraction: "attributes.output.value"
+  }
+}]')"
 
 ax tasks create-evaluation \
   --name "$TASK_NAME" \
