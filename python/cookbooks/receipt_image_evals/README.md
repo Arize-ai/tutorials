@@ -30,9 +30,9 @@ set +a
 python receipt_app.py
 ```
 
-Open the local URL printed by Gradio, select a receipt, and choose **Extract and trace**. The page shows the image, the model result, and the fixture's expected JSON. Use **Inject visual-groundedness error** to replace the merchant and change the total deterministically; this gives the evaluator a reliable `not_grounded` demonstration.
+Open the local URL printed by Gradio, select a submitted receipt from the expense inbox, and choose **Process expense**. The page shows the receipt document, an expense summary, and the structured expense record.
 
-To trace every non-injected fixture without launching the UI:
+To trace every receipt without launching the UI:
 
 ```bash
 python receipt_app.py --batch
@@ -46,8 +46,8 @@ The app registers `arize-otel`, enables OpenInference's OpenAI instrumentor, and
 
 - the image URL in the input value, `receipt.image.url`, and the OpenInference image-message field
 - fixture ID and scenario
-- expected structured data and extraction output
-- extraction model, intended judge model, and injected-error flag
+- extraction output
+- extraction model and intended judge model
 
 This makes the data available for a span-level evaluator mapping. Map `receipt_image` to `attributes.input.value` and `extraction` to `attributes.output.value`. The input contains the raw GitHub image URL, so AX and the judge can fetch an image rather than process an embedded base64 payload.
 
@@ -59,7 +59,7 @@ Create a categorical **span-level** LLM-as-a-judge evaluator in AX with these la
 - `not_grounded`: it asserts a merchant, amount, or line item not supported by the image.
 - `needs_review`: the image is too degraded or ambiguous to assess confidently.
 
-Use `gpt-5.6-luna` for the judge and start by previewing it on one standard run, one injected-error run, and one degraded fixture. Disable function calling for this evaluator and require its explanation to be valid JSON with `evaluated_extraction` and `judge_result` fields. This keeps the extraction JSON and the judge's label/reason together in AX. Then attach it to a continuous evaluation task. The stronger judge can tell you whether a cheaper extraction model is sufficient only after you calibrate its labels against human annotations from your receipts.
+Use `gpt-5.6-luna` for the judge and preview it on clear and degraded receipts. Disable function calling for this evaluator and require its explanation to be valid JSON with `evaluated_extraction` and `judge_result` fields. This keeps the extraction JSON and the judge's label/reason together in AX. Then attach it to a continuous evaluation task. The stronger judge can tell you whether a cheaper extraction model is sufficient only after you calibrate its labels against human annotations from your receipts.
 
 ## Cost, privacy, and images
 

@@ -7,6 +7,7 @@ import base64
 import io
 import json
 import os
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -24,13 +25,34 @@ IMAGE_PATHS = sorted(IMAGES.glob("*.png"), key=lambda path: int(path.stem))
 if not IMAGE_PATHS:
     raise RuntimeError(f"No numbered PNG images found in {IMAGES}")
 FIXTURE_BY_ID = {
-    path.stem: {"id": path.stem, "image": path.name, "scenario": "user_supplied", "expected": None}
+    path.stem: {"id": path.stem, "image": path.name, "scenario": "expense_inbox"}
     for path in IMAGE_PATHS
 }
 EXTRACTION_MODEL = "gpt-5.4-mini"
 # Used when configuring the AX evaluator, not by this app. Set this to the
 # model exposed by the selected AX AI integration.
 JUDGE_MODEL = os.environ.get("RECEIPT_JUDGE_MODEL", "gpt-5.6-luna")
+
+APP_CSS = """
+.gradio-container { max-width: 1280px !important; background: #f8fafc; }
+.app-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 0 28px; }
+.brand { font-size: 22px; font-weight: 700; color: #0f172a; letter-spacing: -0.02em; }
+.brand span { color: #2563eb; }
+.eyebrow { color: #64748b; font-size: 13px; margin-top: 3px; }
+.connection { background: #dcfce7; color: #166534; border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 600; }
+.workspace { background: white; border: 1px solid #e2e8f0; border-radius: 14px; padding: 20px; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
+.section-title { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+.section-copy { color: #64748b; font-size: 13px; margin-bottom: 16px; }
+.expense-summary { border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; background: #fff; }
+.expense-summary h3 { margin: 0 0 8px; color: #0f172a; font-size: 18px; }
+.expense-total { font-size: 28px; font-weight: 700; color: #0f172a; margin: 4px 0 14px; }
+.expense-meta { display: flex; gap: 24px; color: #475569; font-size: 13px; }
+.expense-meta strong { display: block; color: #0f172a; font-size: 14px; }
+.review-badge { display: inline-block; margin-top: 14px; padding: 5px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.review-ok { background: #dcfce7; color: #166534; }
+.review-needed { background: #fef3c7; color: #92400e; }
+.trace-status { color: #475569; font-size: 13px; padding-top: 12px; }
+"""
 
 RECEIPT_SCHEMA = {
     "type": "object",
@@ -96,16 +118,6 @@ If a field is unclear, return null or an empty list and set needs_review to true
 This is fixture {fixture['id']} with scenario {fixture['scenario']}."""
 
 
-def inject_error(result: dict[str, Any]) -> dict[str, Any]:
-    """Make a repeatable visual-groundedness failure for evaluator demos."""
-    wrong = dict(result)
-    wrong["merchant"] = "Harborline Imports"
-    if isinstance(wrong.get("total"), (int, float)):
-        wrong["total"] = round(wrong["total"] + 12.34, 2)
-    wrong["needs_review"] = False
-    return wrong
-
-
 def model_extract(fixture: dict[str, Any]) -> dict[str, Any]:
     if not os.environ.get("OPENAI_API_KEY"):
         raise RuntimeError("Set OPENAI_API_KEY before extracting a receipt.")
@@ -126,7 +138,7 @@ def model_extract(fixture: dict[str, Any]) -> dict[str, Any]:
     return json.loads(response.output_text)
 
 
-def run_fixture(fixture_id: str, add_error: bool = False) -> tuple[dict[str, Any], str]:
+def run_fixture(fixture_id: str) -> tuple[dict[str, Any], str]:
     fixture = FIXTURE_BY_ID[fixture_id]
     attrs = {
         "openinference.span.kind": "CHAIN",
@@ -137,19 +149,14 @@ def run_fixture(fixture_id: str, add_error: bool = False) -> tuple[dict[str, Any
         "receipt.image.url": image_url(fixture),
         "receipt.extraction_model": os.environ.get("RECEIPT_EXTRACTION_MODEL", EXTRACTION_MODEL),
         "receipt.judge_model": JUDGE_MODEL,
-        "receipt.injected_error": add_error,
     }
-    if fixture["expected"] is not None:
-        attrs["receipt.expected"] = json.dumps(fixture["expected"])
     if TRACER is None:
         result = model_extract(fixture)
-        return (inject_error(result) if add_error else result), "Tracing is disabled: set ARIZE_API_KEY and ARIZE_SPACE_ID."
+        return result, "Tracing is disabled: set ARIZE_API_KEY and ARIZE_SPACE_ID."
     with TRACER.start_as_current_span("receipt.extract", attributes=attrs) as span:
         trace_id = format(span.get_span_context().trace_id, "032x")
         try:
             result = model_extract(fixture)
-            if add_error:
-                result = inject_error(result)
             span.set_attribute("output.value", json.dumps(result))
             span.set_attribute("output.mime_type", "application/json")
             span.set_status(Status(StatusCode.OK))
@@ -160,21 +167,42 @@ def run_fixture(fixture_id: str, add_error: bool = False) -> tuple[dict[str, Any
             raise
 
 
-def ui_run(fixture_id: str, add_error: bool):
+def expense_summary(result: dict[str, Any]) -> str:
+    currency = escape(str(result.get("currency") or "—"))
+    merchant = escape(str(result.get("merchant") or "Merchant pending review"))
+    total = result.get("total")
+    formatted_total = f"{currency} {total:,.2f}" if isinstance(total, (int, float)) else "Amount pending review"
+    item_count = len(result.get("items") or [])
+    review_needed = result.get("needs_review", False)
+    review_class = "review-needed" if review_needed else "review-ok"
+    review_text = "Review needed" if review_needed else "Ready for review"
+    return f"""
+    <div class="expense-summary">
+      <h3>{merchant}</h3>
+      <div class="expense-total">{formatted_total}</div>
+      <div class="expense-meta">
+        <div><span>Expense type</span><strong>Receipt</strong></div>
+        <div><span>Line items</span><strong>{item_count}</strong></div>
+        <div><span>Currency</span><strong>{currency}</strong></div>
+      </div>
+      <span class="review-badge {review_class}">{review_text}</span>
+    </div>
+    """
+
+
+def ui_run(fixture_id: str):
     try:
-        result, status = run_fixture(fixture_id, add_error)
+        result, status = run_fixture(fixture_id)
         fixture = FIXTURE_BY_ID[fixture_id]
-        expected = json.dumps(fixture["expected"], indent=2) if fixture["expected"] is not None else "No expected data supplied."
-        return str(IMAGES / fixture["image"]), json.dumps(result, indent=2), expected, status
+        return str(IMAGES / fixture["image"]), expense_summary(result), json.dumps(result, indent=2), f"<div class=\"trace-status\">{escape(status)}</div>"
     except Exception as error:
         fixture = FIXTURE_BY_ID[fixture_id]
-        expected = json.dumps(fixture["expected"], indent=2) if fixture["expected"] is not None else "No expected data supplied."
-        return str(IMAGES / fixture["image"]), "", expected, f"Error: {error}"
+        return str(IMAGES / fixture["image"]), "", "", f"<div class=\"trace-status\">Processing failed: {escape(str(error))}</div>"
 
 
 def run_batch() -> None:
     for fixture in FIXTURE_BY_ID.values():
-        result, _ = run_fixture(fixture["id"], add_error=False)
+        result, _ = run_fixture(fixture["id"])
         print(json.dumps({"fixture_id": fixture["id"], "result": result}))
     provider = trace.get_tracer_provider()
     if hasattr(provider, "force_flush"):
@@ -182,19 +210,26 @@ def run_batch() -> None:
 
 
 def build_app():
-    choices = [(f"Image {f['id']}", f["id"]) for f in FIXTURE_BY_ID.values()]
-    with gr.Blocks(title="Receipt Image Evals") as app:
-        gr.Markdown("# Receipt image evaluation playground\nExtract fictional receipts, trace the image reference to AX, and use the deterministic error to exercise a visual-groundedness judge.")
-        with gr.Row():
-            fixture = gr.Dropdown(choices=choices, value=choices[0][1], label="Receipt fixture")
-            add_error = gr.Checkbox(label="Inject visual-groundedness error", value=False)
-            run = gr.Button("Extract and trace", variant="primary")
-        with gr.Row():
-            image = gr.Image(label="Selected receipt", type="filepath")
-            output = gr.Code(label="Extraction result", language="json")
-            expected = gr.Code(label="Expected fixture data", language="json")
-        status = gr.Markdown()
-        run.click(ui_run, inputs=[fixture, add_error], outputs=[image, output, expected, status])
+    choices = [(f"Receipt #{int(f['id']):03d} · Pending", f["id"]) for f in FIXTURE_BY_ID.values()]
+    with gr.Blocks(title="Expense Inbox") as app:
+        gr.HTML("""
+        <div class="app-header">
+          <div><div class="brand">Northstar <span>Expenses</span></div><div class="eyebrow">Receipt inbox · AI-assisted expense processing</div></div>
+          <div class="connection">● Tracing to Arize AX</div>
+        </div>
+        """)
+        with gr.Group(elem_classes="workspace"):
+            gr.HTML("<div class=\"section-title\">Expense inbox</div><div class=\"section-copy\">Select a submitted receipt and create a structured expense record.</div>")
+            with gr.Row():
+                fixture = gr.Dropdown(choices=choices, value=choices[0][1], label="Submitted receipt", scale=3)
+                run = gr.Button("Process expense", variant="primary", scale=1)
+            with gr.Row():
+                image = gr.Image(value=str(IMAGES / FIXTURE_BY_ID[choices[0][1]]["image"]), label="Receipt document", type="filepath", height=560, scale=1)
+                with gr.Column(scale=1):
+                    summary = gr.HTML("<div class=\"expense-summary\"><h3>Expense details</h3><div class=\"section-copy\">Process a receipt to create an expense record.</div></div>")
+                    output = gr.Code(label="Structured expense record", language="json", lines=18)
+            status = gr.HTML()
+        run.click(ui_run, inputs=fixture, outputs=[image, summary, output, status])
         fixture.change(lambda fixture_id: str(IMAGES / FIXTURE_BY_ID[fixture_id]["image"]), fixture, image)
     return app
 
@@ -206,4 +241,8 @@ if __name__ == "__main__":
     if args.batch:
         run_batch()
     else:
-        build_app().launch(server_name=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"), server_port=int(os.environ.get("PORT", "7860")))
+        build_app().launch(
+            server_name=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
+            server_port=int(os.environ.get("PORT", "7860")),
+            css=APP_CSS,
+        )
