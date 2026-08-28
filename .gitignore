@@ -4,8 +4,3 @@ __pycache__/
 .DS_Store
 .env
 node_modules/
-.venv/
-.arize-eval-check/
-.arize-tmp-traces/
-**/.arize-tmp-traces/
-python/cookbooks/receipt_image_evals/skills-lock.json
