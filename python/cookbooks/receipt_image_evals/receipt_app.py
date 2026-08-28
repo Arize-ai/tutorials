@@ -34,7 +34,33 @@ EXTRACTION_MODEL = "gpt-5.4-mini"
 JUDGE_MODEL = os.environ.get("RECEIPT_JUDGE_MODEL", "gpt-5.6-luna")
 
 APP_CSS = """
-.gradio-container { max-width: 1120px !important; background: #f7f9fc; padding-top: 24px !important; }
+:root {
+  --body-background-fill: #f7f9fc !important;
+  --body-text-color: #4a6881 !important;
+  --body-text-color-subdued: #718096 !important;
+  --block-background-fill: #ffffff !important;
+  --block-label-background-fill: #ffffff !important;
+  --block-label-text-color: #4a6881 !important;
+  --input-background-fill: #ffffff !important;
+  --input-background-fill-focus: #ffffff !important;
+  --input-background-fill-hover: #f8fbfe !important;
+  --code-background-fill: #fbfdff !important;
+  --button-primary-background-fill: #5f87ae !important;
+  --button-primary-background-fill-hover: #4f769b !important;
+  --button-primary-text-color: #ffffff !important;
+}
+html, body { background: #f7f9fc !important; color-scheme: light !important; }
+.gradio-container { width: min(1120px, calc(100% - 32px)) !important; max-width: 1120px !important; margin: 0 auto !important; background: #f7f9fc !important; color: #4a6881 !important; padding: 24px 0 !important; }
+.gradio-container > .main, .gradio-container .main { width: 100% !important; max-width: none !important; margin: 0 auto !important; }
+.gradio-container .block, .gradio-container .form, .gradio-container .gr-box, .gradio-container .gr-panel { background: #ffffff !important; border-color: #e4ebf2 !important; color: #4a6881 !important; }
+.gradio-container .wrap, .gradio-container .wrap-inner, .gradio-container .container { background: #ffffff !important; color: #4a6881 !important; }
+.gradio-container input, .gradio-container textarea, .gradio-container button { color-scheme: light !important; }
+.gradio-container input, .gradio-container textarea { background: #ffffff !important; color: #4a6881 !important; border-color: #d7e2ec !important; }
+.gradio-container .cm-editor, .gradio-container .cm-scroller, .gradio-container .cm-gutters, .gradio-container .cm-content { background: #fbfdff !important; color: #4a6881 !important; }
+.gradio-container .cm-activeLine, .gradio-container .cm-activeLineGutter { background: transparent !important; }
+#process-expense { min-height: 44px !important; align-self: end; }
+#process-expense button { min-height: 44px !important; }
+#expense-record, #expense-record textarea { background: #fbfdff !important; color: #4a6881 !important; }
 .app-header { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 14px 0 30px; }
 .brand { font-size: 28px; font-weight: 700; color: #24405f; letter-spacing: -0.03em; }
 .brand span { color: #4f7cac; }
@@ -259,12 +285,12 @@ def build_app():
             queue = gr.HTML(queue_status(initial_processed))
             with gr.Row():
                 fixture = gr.Dropdown(choices=choices, value=choices[0][1], label="Submitted receipt", scale=3)
-                run = gr.Button("Process expense", variant="primary", scale=1)
+                run = gr.Button("Process expense", variant="primary", scale=1, elem_id="process-expense")
             with gr.Row():
                 image = gr.Image(value=str(IMAGES / FIXTURE_BY_ID[choices[0][1]]["image"]), label="Receipt document", type="filepath", height=560, scale=1)
                 with gr.Column(scale=1):
                     summary = gr.HTML("<div class=\"expense-summary\"><h3>Expense details</h3><div class=\"section-copy\">Process a receipt to create an expense record.</div></div>")
-                    output = gr.Code(label="Structured expense record", language="json", lines=18)
+                    output = gr.Textbox(label="Structured expense record", lines=18, interactive=False, elem_id="expense-record")
             status = gr.HTML()
         run.click(ui_run, inputs=[fixture, processed], outputs=[image, summary, output, status, queue, fixture, processed])
         fixture.change(lambda fixture_id: str(IMAGES / FIXTURE_BY_ID[fixture_id]["image"]), fixture, image)
