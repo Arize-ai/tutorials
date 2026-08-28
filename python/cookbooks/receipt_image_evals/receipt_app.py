@@ -283,7 +283,7 @@ def build_app():
             with gr.Column(scale=1):
                 run = gr.Button("Process expense", variant="primary", elem_id="process-expense")
         with gr.Row():
-            image = gr.Image(value=str(IMAGES / FIXTURE_BY_ID[choices[0][1]]["image"]), label="Receipt document", type="filepath", height=560, scale=1)
+            image = gr.Image(value=str(IMAGES / FIXTURE_BY_ID[choices[0][1]]["image"]), show_label=False, type="filepath", height=560, scale=1)
             with gr.Column(scale=1):
                 summary = gr.HTML("<div class=\"expense-summary\"><h3>Expense details</h3><div class=\"section-copy\">Process a receipt to create an expense record.</div></div>")
                 gr.HTML("<div class=\"field-label\">Structured expense record</div>")
