@@ -1,10 +1,12 @@
 {
   "_comment": "Single source of truth for the check-models skill. Update the numbers in `openai` and `anthropic` whenever a new model ships, then re-run the scanner. The scanner derives the full replacement table from these policy values — you should not need to enumerate every old ID.",
-  "updated": "2026-06-18",
-  "verifiedBy": "WebFetch developers.openai.com/api/docs/models + /deprecations (2026-06-18); Google via ai.google.dev/gemini-api/docs/models (2026-06-18); Anthropic via claude-api skill shared/models.md",
+  "updated": "2026-08-28",
+  "verifiedBy": "OpenAI Models documentation (2026-08-28); Google via ai.google.dev/gemini-api/docs/models (2026-06-18); Anthropic via claude-api skill shared/models.md",
 
   "openai": {
-    "flagship": "gpt-5.5",
+    "flagship": "gpt-5.6-sol",
+    "terra": "gpt-5.6-terra",
+    "luna": "gpt-5.6-luna",
     "pro": "gpt-5.5-pro",
     "mini": "gpt-5.4-mini",
     "nano": "gpt-5.4-nano",
@@ -12,7 +14,7 @@
     "proMinVersion": 5.5,
     "miniMinVersion": 5.4,
     "nanoMinVersion": 5.4,
-    "notes": "GPT-5.5 is the latest flagship (released 2026-04-23, API id gpt-5.5-2026-04-23) and has no mini/nano variant — mini/nano stay on the 5.4 generation. GPT-5.4 also remains available as a cheaper flagship (still current, NOT deprecated per OpenAI's models page), so flagshipMinVersion is 5.4 — only gpt-5.3 and older flag for migration; gpt-5.4 and gpt-5.5 both pass. Migration target for outdated flagships is still gpt-5.5 (the `flagship` value). Match the SIZE tier: a *-mini model migrates to the latest mini, never the flagship. The GPT-5 family are REASONING models — they reject temperature/top_p (see codeChanges). For temperature-dependent code use the nonReasoning tier below.",
+    "notes": "GPT-5.6 Sol is the latest flagship. GPT-5.6 Terra balances intelligence and cost, and GPT-5.6 Luna is the cost-sensitive, high-volume option; the scanner recognizes all GPT-5.6 variants through the flagship policy ceiling. Mini/nano stay on the 5.4 generation. GPT-5.4 and GPT-5.5 remain accepted by the 5.4 flagship floor; only gpt-5.3 and older flag for migration. Migration target for outdated flagships is gpt-5.6-sol (the `flagship` value). Match the SIZE tier: a *-mini model migrates to the latest mini, never the flagship. The GPT-5 family are REASONING models — they reject temperature/top_p (see codeChanges). For temperature-dependent code use the nonReasoning tier below.",
     "nonReasoning": {
       "flagship": "gpt-4.1",
       "mini": "gpt-4.1-mini",
