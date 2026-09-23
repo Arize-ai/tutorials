@@ -15,7 +15,7 @@ The agent runs six scenarios, three intended to resolve the request and three in
 
 ## Configure environment
 
-Each app has its own `.env.example` containing only the values it needs. Copy `agent/.env.example` to `agent/.env` and set its OpenAI and Arize values. Copy `evaluator/.env.example` to `evaluator/.env` and set the TypeSafe key. The agent defaults to `gpt-5.4-mini`; set `OPENAI_MODEL` in `agent/.env` if you want to override it.
+Each app has its own `.env.example` containing only the values it needs. Copy `agent/.env.example` to `agent/.env` and set its OpenAI and Arize values. Copy `evaluator/.env.example` to `evaluator/.env` and set the TypeSafe key. The agent defaults to `gpt-5.4-mini`; set `OPENAI_MODEL` in `agent/.env` if you want to override it. The project name is `jev-remote-evaluator-balanced`, as set by `ARIZE_PROJECT_NAME` in `agent/.env.example`.
 
 ## Run the agent
 
@@ -63,7 +63,7 @@ Copy its `https://….trycloudflare.com` URL. The unauthenticated quick tunnel i
 
 ## Configure the AX Remote Eval
 
-1. In AX, open **Evaluators → New Evaluator → Create blank Remote Eval**.
+1. In AX, open **Evaluators → New Evaluator → Create Remote Eval**.
 2. Set the endpoint to `https://<your-tunnel>.trycloudflare.com/v1/evaluate`. No headers are needed for this demo.
 3. Define the input schema with two string fields: `input` and `output`.
 4. Map `input` to `attributes.input.value` and `output` to `attributes.output.value`.

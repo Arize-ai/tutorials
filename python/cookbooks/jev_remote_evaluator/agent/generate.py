@@ -47,7 +47,7 @@ def main() -> None:
     provider = register(
         space_id=os.environ["ARIZE_SPACE_ID"],
         api_key=os.environ["ARIZE_API_KEY"],
-        project_name=os.getenv("ARIZE_PROJECT_NAME", "jev-remote-evaluator"),
+        project_name=os.getenv("ARIZE_PROJECT_NAME", "jev-remote-evaluator-balanced"),
         batch=False,
     )
     OpenAIInstrumentor().instrument(tracer_provider=provider)
