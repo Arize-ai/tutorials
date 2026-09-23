@@ -25,7 +25,7 @@ cp .env.example .env
 python generate.py
 ```
 
-The batch app runs several baked-in support requests through OpenAI and prints each request/response. It creates one parent span per prompt, records the request and response as span input/output, and instruments the OpenAI call as a child span. Tracing exports promptly so each example appears in the configured AX project (`ARIZE_PROJECT_NAME`, default `jev-remote-evaluator`). Browse that project in AX and confirm the traces are present before continuing.
+The batch app runs several baked-in support requests through OpenAI and prints each request/response. The OpenInference OpenAI instrumentor creates one LLM span per prompt and captures the request and response as span input/output. Tracing exports promptly so each example appears in the configured AX project (`ARIZE_PROJECT_NAME`, default `jev-remote-evaluator`). Browse that project in AX and confirm the traces are present before continuing.
 
 Set `OPENAI_MODEL` in `.env` to use another available model. Configure `TYPESAFE_API_KEY` for the local evaluator service.
 

@@ -6,9 +6,7 @@ import os
 
 from dotenv import load_dotenv
 from openai import OpenAI
-from openinference.instrumentation import OITracer, TraceConfig
 from openinference.instrumentation.openai import OpenAIInstrumentor
-from openinference.semconv.trace import OpenInferenceSpanKindValues, SpanAttributes
 from arize.otel import register
 
 PROMPTS = [
@@ -34,22 +32,9 @@ def main() -> None:
         batch=False,
     )
     OpenAIInstrumentor().instrument(tracer_provider=provider)
-    tracer = OITracer(provider.get_tracer("jev-remote-evaluator"), config=TraceConfig())
     client = OpenAI()
     model = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
     for index, prompt in enumerate(PROMPTS, 1):
-        response = generate_response(tracer, client, model, prompt)
-        print(json.dumps({"example": index, "model": model, "input": prompt, "output": response}))
-
-
-def generate_response(tracer: OITracer, client: OpenAI, model: str, prompt: str) -> str:
-    """The chain span holds the support request and generated response."""
-    with tracer.start_as_current_span("support_response") as span:
-        span.set_attribute(
-            SpanAttributes.OPENINFERENCE_SPAN_KIND,
-            OpenInferenceSpanKindValues.CHAIN.value,
-        )
-        span.set_attribute("input.value", json.dumps({"input": prompt}))
         response = client.responses.create(
             model=model,
             instructions=(
@@ -58,9 +43,7 @@ def generate_response(tracer: OITracer, client: OpenAI, model: str, prompt: str)
             ),
             input=prompt,
         )
-        output = response.output_text
-        span.set_attribute("output.value", json.dumps({"output": output}))
-        return output
+        print(json.dumps({"example": index, "model": model, "input": prompt, "output": response.output_text}))
 
 
 if __name__ == "__main__":
