@@ -2,7 +2,7 @@
 
 This cookbook creates sample customer support traces in Arize AX, then evaluates whether each response resolves the request using TypeSafe Jev as an Arize remote evaluator. Follow the [Use Jev as a Remote Evaluator guide](https://arize.com/docs/ax/cookbooks/evaluate/jev-remote-evaluator) for the full walkthrough.
 
-The generator calls a live OpenAI model, `gpt-5.4-mini` by default. Model responses and Jev judgments can vary between runs, so use the results to demonstrate the workflow rather than as fixed expected labels.
+The generator calls a live OpenAI model, `gpt-5.4-mini` by default. It includes six scenarios: three instruct the demo agent to resolve the request and three to leave it unresolved. These are intended to produce an even split, but live model responses and Jev judgments can vary between runs.
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ cp .env.example .env
 python generate.py
 ```
 
-The batch app runs several baked-in support requests through OpenAI and prints each request/response. The OpenInference OpenAI instrumentor creates one LLM span per prompt and captures the request and response as span input/output. Tracing exports promptly so each example appears in the configured AX project (`ARIZE_PROJECT_NAME`, default `jev-remote-evaluator`). Browse that project in AX and confirm the traces are present before continuing.
+The batch app runs six baked-in support requests through OpenAI and prints each request/response with its intended `yes`/`no` label. The OpenInference OpenAI instrumentor creates one LLM span per prompt and captures the request and response as span input/output. Tracing exports promptly so each example appears in the configured AX project (`ARIZE_PROJECT_NAME`, default `jev-remote-evaluator`). Browse that project in AX and confirm the traces are present before continuing.
 
 Set `OPENAI_MODEL` in `.env` to use another available model. Configure `TYPESAFE_API_KEY` for the local evaluator service.
 
