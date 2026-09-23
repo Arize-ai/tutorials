@@ -15,14 +15,14 @@ The agent runs six scenarios, three intended to resolve the request and three in
 
 ## Configure environment
 
-From this cookbook directory, copy `.env.example` to `.env` and set `OPENAI_API_KEY`, `ARIZE_API_KEY`, `ARIZE_SPACE_ID`, and `TYPESAFE_API_KEY`. The agent loads the root `.env`; the evaluator reads it from the shell environment. Set `ARIZE_PROJECT_NAME` to choose the AX project (default: `jev-remote-evaluator`) and `OPENAI_MODEL` to override `gpt-5.4-mini`.
+Each app has its own `.env.example` containing only the values it needs. Copy `agent/.env.example` to `agent/.env` and set its OpenAI and Arize values. Copy `evaluator/.env.example` to `evaluator/.env` and set the TypeSafe key. The agent defaults to `gpt-5.4-mini`; set `OPENAI_MODEL` in `agent/.env` if you want to override it.
 
 ## Run the agent
 
 ```bash
 cd python/cookbooks/jev_remote_evaluator
-cp .env.example .env
-# Edit .env with your OpenAI, Arize, and TypeSafe credentials.
+cp agent/.env.example agent/.env
+# Edit agent/.env with your OpenAI and Arize credentials.
 python -m venv agent/.venv
 source agent/.venv/bin/activate
 pip install -r agent/requirements.txt
@@ -33,15 +33,17 @@ The OpenInference OpenAI instrumentor creates one LLM span per request and captu
 
 ## Run the Jev evaluator
 
-In a second terminal, install the evaluator's separate dependencies and load the same root `.env` file:
+In a second terminal, configure the evaluator's separate credentials and dependencies:
 
 ```bash
 cd python/cookbooks/jev_remote_evaluator
+cp evaluator/.env.example evaluator/.env
+# Edit evaluator/.env with your TypeSafe API key.
 python -m venv evaluator/.venv
 source evaluator/.venv/bin/activate
 pip install -r evaluator/requirements.txt
 cd evaluator
-set -a; source ../.env; set +a
+set -a; source .env; set +a
 uvicorn remote_eval_server:app --host 127.0.0.1 --port 8080
 ```
 
