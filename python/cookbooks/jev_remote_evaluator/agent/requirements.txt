@@ -4,6 +4,3 @@ openai
 openinference-instrumentation
 openinference-instrumentation-openai
 python-dotenv
-fastapi
-uvicorn
-httpx

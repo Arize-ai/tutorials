@@ -1,8 +1,8 @@
 # Jev Remote Evaluator
 
-This cookbook creates sample customer support traces in Arize AX, then evaluates whether each response resolves the request using TypeSafe Jev as an Arize remote evaluator. Follow the [Use Jev as a Remote Evaluator guide](https://arize.com/docs/ax/cookbooks/evaluate/jev-remote-evaluator) for the full walkthrough.
+This cookbook has two small apps: `agent/` generates customer-support traces with OpenAI and `evaluator/` serves a FastAPI endpoint that evaluates request resolution with TypeSafe Jev. Follow the [Use Jev as a Remote Evaluator guide](https://arize.com/docs/ax/cookbooks/evaluate/jev-remote-evaluator) for the AX walkthrough.
 
-The generator calls a live OpenAI model, `gpt-5.4-mini` by default. It includes six scenarios: three instruct the demo agent to resolve the request and three to leave it unresolved. These are intended to produce an even split, but live model responses and Jev judgments can vary between runs.
+The agent runs six scenarios, three intended to resolve the request and three intended to leave it unresolved. They are intended to produce an even split, but live OpenAI responses and Jev judgments can vary between runs.
 
 ## Prerequisites
 
@@ -10,49 +10,54 @@ The generator calls a live OpenAI model, `gpt-5.4-mini` by default. It includes 
 - OpenAI API key with access to the configured model
 - Arize AX API key and Space ID
 - TypeSafe API key
-- A tunneling tool such as `cloudflared` or `ngrok` to expose the local service to AX during the demo
+- A tunneling tool such as `cloudflared` or `ngrok` to expose the local evaluator to AX during the demo
 - An Arize AX Enterprise account with remote evaluators enabled
 
-## Generate traces
+## Configure environment
+
+From this cookbook directory, copy `.env.example` to `.env` and set `OPENAI_API_KEY`, `ARIZE_API_KEY`, `ARIZE_SPACE_ID`, and `TYPESAFE_API_KEY`. The agent loads the root `.env`; the evaluator reads it from the shell environment. Set `ARIZE_PROJECT_NAME` to choose the AX project (default: `jev-remote-evaluator`) and `OPENAI_MODEL` to override `gpt-5.4-mini`.
+
+## Run the agent
 
 ```bash
 cd python/cookbooks/jev_remote_evaluator
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
 cp .env.example .env
-# Edit .env with OpenAI, Arize, and TypeSafe credentials.
-python generate.py
+# Edit .env with your OpenAI, Arize, and TypeSafe credentials.
+python -m venv agent/.venv
+source agent/.venv/bin/activate
+pip install -r agent/requirements.txt
+python agent/generate.py
 ```
 
-The batch app runs six baked-in support requests through OpenAI and prints each request/response with its intended `yes`/`no` label. The OpenInference OpenAI instrumentor creates one LLM span per prompt and captures the request and response as span input/output. Tracing exports promptly so each example appears in the configured AX project (`ARIZE_PROJECT_NAME`, default `jev-remote-evaluator`). Browse that project in AX and confirm the traces are present before continuing.
+The OpenInference OpenAI instrumentor creates one LLM span per request and captures the request and response as span input/output. Each example is exported promptly. Browse the configured project in AX and confirm its six traces are present.
 
-Set `OPENAI_MODEL` in `.env` to use another available model. Configure `TYPESAFE_API_KEY` for the local evaluator service.
+## Run the Jev evaluator
 
-## Start and test the evaluator
-
-In a second terminal, activate the environment and load the same `.env` file (or export `TYPESAFE_API_KEY` there):
+In a second terminal, install the evaluator's separate dependencies and load the same root `.env` file:
 
 ```bash
 cd python/cookbooks/jev_remote_evaluator
-source .venv/bin/activate
-set -a; source .env; set +a
+python -m venv evaluator/.venv
+source evaluator/.venv/bin/activate
+pip install -r evaluator/requirements.txt
+cd evaluator
+set -a; source ../.env; set +a
 uvicorn remote_eval_server:app --host 127.0.0.1 --port 8080
 ```
 
-Check the health endpoint:
+Check the health endpoint from another terminal:
 
 ```bash
 curl http://127.0.0.1:8080/
 ```
 
-It reports whether the evaluator process has a TypeSafe key. AX cannot reach localhost, so in a third terminal start a temporary Cloudflare quick tunnel:
+To let AX reach the local server, start a temporary Cloudflare quick tunnel in a third terminal:
 
 ```bash
 cloudflared tunnel --url http://127.0.0.1:8080
 ```
 
-Copy the generated `https://….trycloudflare.com` URL. This unauthenticated quick tunnel is for a temporary demo only; stop it when finished.
+Copy its `https://….trycloudflare.com` URL. The unauthenticated quick tunnel is for this temporary demo only; stop it when finished.
 
 ## Configure the AX Remote Eval
 
@@ -64,7 +69,7 @@ Copy the generated `https://….trycloudflare.com` URL. This unauthenticated qui
 6. Save the evaluator, create a task for it, select the sample project and the same input/output mappings, then run the task on the project's traces.
 7. Open the traces to confirm evaluation results were written.
 
-Jev asks whether the response resolves the request. It returns a Noul probability: `0.5` or above becomes label `yes`; below `0.5` becomes `no`. The probability is returned as `score`.
+Jev asks whether the response resolves the request. A probability of `0.5` or higher becomes label `yes`; a lower probability becomes `no`. The probability is returned as `score`.
 
 ## Troubleshooting
 
@@ -72,6 +77,6 @@ Jev asks whether the response resolves the request. It returns a Noul probabilit
 - `Jev returned 401`: check that the key is valid and has access.
 - `Could not read a valid Jev probability`: Jev returned a missing, malformed, or out-of-range answer; inspect the service output and retry.
 - AX cannot reach the endpoint: ensure Uvicorn and the tunnel are running and the URL ends in `/v1/evaluate`.
-- Different labels between runs: the OpenAI response and Jev judgment are generated live and can vary.
+- Different labels between runs: OpenAI responses and Jev judgments are generated live and can vary.
 
 Stop Uvicorn and `cloudflared` with `Ctrl+C` when finished.
