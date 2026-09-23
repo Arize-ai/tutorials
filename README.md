@@ -24,6 +24,7 @@ This repository contains tutorials and examples demonstrating how to leverage Ar
 
 - **Tracing** - Understand your LLM and ML systems with comprehensive traces
 - **Evaluations** - Benchmark and improve your models with advanced evaluation techniques
+  - [Use TypeSafe Jev as an Arize AX remote evaluator](https://arize.com/docs/ax/cookbooks/evaluate/jev-remote-evaluator) ([runnable Python cookbook](python/cookbooks/jev_remote_evaluator/README.md))
 - **Datasets** - Create and manage datasets for testing and fine-tuning
 - **Experiments** - Track changes and compare performance across model versions
 - **Guardrails** - Implement safeguards for responsible AI deployment

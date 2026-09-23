@@ -1,0 +1,9 @@
+arize>=8.0.0
+arize-otel
+openai
+openinference-instrumentation
+openinference-instrumentation-openai
+python-dotenv
+fastapi
+uvicorn
+httpx

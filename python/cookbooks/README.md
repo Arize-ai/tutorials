@@ -6,6 +6,10 @@ Each asset includes a **Last Updated** date so readers can understand its freshn
 
 ---
 
+## Runnable cookbooks
+
+- [Jev Remote Evaluator](jev_remote_evaluator/README.md) — generate OpenAI support traces and evaluate whether responses resolve requests with TypeSafe Jev. Follow the [Arize AX guide](https://arize.com/docs/ax/cookbooks/evaluate/jev-remote-evaluator) for setup and task configuration.
+
 ## Contents
 
 You may find assets such as:
