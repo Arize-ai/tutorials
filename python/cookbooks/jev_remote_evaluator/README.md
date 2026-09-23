@@ -2,7 +2,7 @@
 
 This cookbook has two small apps: `agent/` generates customer-support traces with OpenAI and `evaluator/` serves a FastAPI endpoint that evaluates request resolution with TypeSafe Jev. Follow the [Use Jev as a Remote Evaluator guide](https://arize.com/docs/ax/cookbooks/evaluate/jev-remote-evaluator) for the AX walkthrough.
 
-The agent runs six scenarios, three intended to resolve the request and three intended to leave it unresolved. They are intended to produce an even split, but live OpenAI responses and Jev judgments can vary between runs.
+The six inputs mix general support questions the model can answer directly with account-specific requests that require access the demo does not have. The app gives the same capability context to every request and does not instruct the model to produce a pass or fail for any example. This mix is meant to show both Jev labels, but live model responses and Jev judgments can vary, so a 3/3 split is not guaranteed.
 
 ## Prerequisites
 

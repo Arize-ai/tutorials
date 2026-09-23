@@ -10,30 +10,12 @@ from openinference.instrumentation.openai import OpenAIInstrumentor
 from arize.otel import register
 
 EXAMPLES = [
-    (
-        "I was charged twice for order ORD-104. Please refund the duplicate $49 charge to my original payment method.",
-        True,
-    ),
-    (
-        "Please cancel my monthly subscription before the October 1 renewal. My account email is sam@example.com.",
-        True,
-    ),
-    (
-        "My unopened package arrived damaged. Please send a replacement to the same address; the order number is ORD-205.",
-        True,
-    ),
-    (
-        "I can't log in because I lost access to my old email. Please update my account email to sam@example.com.",
-        False,
-    ),
-    (
-        "The app crashes every time I open settings. Please help me fix it.",
-        False,
-    ),
-    (
-        "I want to cancel my subscription so it does not renew next month.",
-        False,
-    ),
+    "How can I reset my password if I forgot it?",
+    "What does it mean when my tracking says 'out for delivery'?",
+    "My package is delayed. What should I check before contacting the carrier?",
+    "Please refund the duplicate $49 charge on order ORD-104 to my original payment method.",
+    "Please cancel my monthly subscription before it renews next month.",
+    "I lost access to my old email. Can you change the email on my account to sam@example.com?",
 ]
 
 
@@ -53,25 +35,19 @@ def main() -> None:
     OpenAIInstrumentor().instrument(tracer_provider=provider)
     client = OpenAI()
     model = os.getenv("OPENAI_MODEL", "gpt-5.4-mini")
-    for index, (prompt, should_resolve) in enumerate(EXAMPLES, 1):
-        scenario_instruction = (
-            "For this demo scenario, the requested action is available and succeeds. "
-            "Complete it and clearly confirm what you did. Do not defer or ask for more information."
-            if should_resolve
-            else "For this demo scenario, do not take the requested action or provide a solution. "
-            "Acknowledge the request and say you will follow up, without resolving it."
-        )
+    for index, prompt in enumerate(EXAMPLES, 1):
         response = client.responses.create(
             model=model,
             instructions=(
-                "You are a customer support agent in a fictional demo. Respond naturally and concisely. "
-                + scenario_instruction
+                "You are a customer support assistant for a fictional online store. "
+                "Respond naturally and concisely. You can answer general questions, but you do not "
+                "have tools to look up or change customer accounts, orders, or payments. Be clear "
+                "about what you can and cannot do."
             ),
             input=prompt,
         )
         print(json.dumps({
             "example": index,
-            "intended_label": "yes" if should_resolve else "no",
             "model": model,
             "input": prompt,
             "output": response.output_text,
