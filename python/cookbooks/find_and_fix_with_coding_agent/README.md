@@ -21,12 +21,12 @@ Run `uv run support.py` with no question to chat interactively.
 
 The agent uses whichever key you set:
 
-| Key set | Provider | Default model |
+| Key set | Provider | Model |
 |---|---|---|
 | `OPENAI_API_KEY` | OpenAI | `gpt-4.1-mini` |
 | `ANTHROPIC_API_KEY` | Anthropic | `claude-haiku-4-5` |
 
-If both keys are set, OpenAI is used unless you set `LLM_PROVIDER=anthropic`. Override the model with `OPENAI_MODEL` or `ANTHROPIC_MODEL`.
+If both keys are set, OpenAI is used.
 
 ## Generate traffic
 
