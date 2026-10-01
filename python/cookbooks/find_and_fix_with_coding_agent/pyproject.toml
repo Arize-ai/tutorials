@@ -1,0 +1,10 @@
+[project]
+name = "trailhead-support-agent"
+version = "0.1.0"
+description = "A small customer support agent for the Arize AX coding-agent cookbook"
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",
+    "python-dotenv>=1.0.0",
+]
