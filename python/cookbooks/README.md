@@ -9,6 +9,7 @@ Each asset includes a **Last Updated** date so readers can understand its freshn
 ## Runnable cookbooks
 
 - [Jev Remote Evaluator](jev_remote_evaluator/README.md) — generate OpenAI support traces and evaluate whether responses resolve requests with TypeSafe Jev. Follow the [Arize AX guide](https://arize.com/docs/ax/cookbooks/evaluate/jev-remote-evaluator) for setup and task configuration.
+- [Find and fix issues with a coding agent](find_and_fix_with_coding_agent/README.md) — a small OpenAI or Anthropic support agent with two planted bugs, used by your coding agent to add tracing and evals, find the failures, and prove the fixes. Follow the [Arize AX guide](https://arize.com/docs/ax/cookbooks/improve/find-and-fix-issues-with-a-coding-agent).
 
 ## Contents
 
