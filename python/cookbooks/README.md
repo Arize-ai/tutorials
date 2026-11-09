@@ -10,6 +10,7 @@ Each asset includes a **Last Updated** date so readers can understand its freshn
 
 - [Jev Remote Evaluator](jev_remote_evaluator/README.md) — generate OpenAI support traces and evaluate whether responses resolve requests with TypeSafe Jev. Follow the [Arize AX guide](https://arize.com/docs/ax/cookbooks/evaluate/jev-remote-evaluator) for setup and task configuration.
 - [Find and fix issues with a coding agent](find_and_fix_with_coding_agent/README.md) — a small OpenAI or Anthropic support agent with two planted bugs, used by your coding agent to add tracing and evals, find the failures, and prove the fixes. Follow the [Arize AX guide](https://arize.com/docs/ax/cookbooks/improve/find-and-fix-issues-with-a-coding-agent).
+- [Arize AX and Dynatrace dual export](dynatrace_dual_export/README.md): send AI spans to Arize AX and all spans, logs, and metrics to Dynatrace with the same trace id, from application code (Python and TypeScript) or through an OpenTelemetry Collector. Follow the [Arize AX guide](https://arize.com/docs/ax/cookbooks/instrument/send-telemetry-to-arize-and-dynatrace).
 
 ## Contents
 

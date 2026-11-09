@@ -1,0 +1,205 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>One trace id, two backends: OpenTelemetry to Dynatrace and Arize AX</title>
+  <desc>An application instrumented with OpenTelemetry and OpenInference sends all spans, logs, and metrics over OTLP to an OpenTelemetry Collector. Shared processing runs once, then a forward connector fans traces out: Dynatrace receives every span with AI content redacted, plus logs and delta metrics; Arize AX receives the AI spans plus the trace root span, tagged as a CHAIN, so every trace has a root in Arize. Both backends store the same trace id.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+    <marker id="arrow-ai" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6741D9"/>
+    </marker>
+    <marker id="arrow-dt" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1971C2"/>
+    </marker>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="115%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#0f172a" flood-opacity="0.08"/>
+    </filter>
+    <style>
+      .h1 { font-size: 26px; font-weight: 700; fill: #0f172a; }
+      .sub { font-size: 14px; fill: #475569; }
+      .card-title { font-size: 16px; font-weight: 700; fill: #0f172a; }
+      .card-sub { font-size: 12px; fill: #64748b; }
+      .span { font-size: 12.5px; fill: #0f172a; }
+      .tag { font-size: 10px; font-weight: 700; letter-spacing: 0.04em; }
+      .mono { font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace; }
+      .proc { font-size: 11.5px; fill: #0f172a; }
+      .label { font-size: 11.5px; fill: #475569; }
+      .legend { font-size: 12px; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect width="1280" height="720" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="40" y="52" class="h1">One trace id, two backends</text>
+  <text x="40" y="78" class="sub">Arize AX gets the AI spans. Dynatrace gets every span, the logs, and the metrics. The trace id is the same in both.</text>
+
+  <!-- ============ Application ============ -->
+  <g filter="url(#shadow)">
+    <rect x="40" y="110" width="360" height="520" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+  </g>
+  <text x="62" y="142" class="card-title">Your application</text>
+  <text x="62" y="160" class="card-sub">OpenTelemetry SDK + OpenInference instrumentors</text>
+  <text x="62" y="186" class="label">One trace</text>
+  <text x="128" y="186" class="label mono" font-size="11">4bf92f35...0e4736</text>
+
+  <!-- trace tree -->
+  <g class="span">
+    <!-- connectors -->
+    <path d="M72 214 V 254 M72 254 H 86 M72 214 V 294 H 86" stroke="#cbd5e1" fill="none"/>
+    <path d="M98 304 V 334 H 112 M98 304 V 374 H 112 M98 304 V 454 H 112 M98 304 V 534 H 112" stroke="#cbd5e1" fill="none"/>
+    <path d="M124 384 V 414 H 138 M124 464 V 494 H 138" stroke="#cbd5e1" fill="none"/>
+
+    <rect x="60" y="198" width="226" height="28" rx="7" fill="#e7f1fb" stroke="#a5c8ee"/>
+    <text x="70" y="216">POST /ask</text>
+    <text x="236" y="216" class="tag" fill="#1971C2">SERVER</text>
+
+    <rect x="86" y="240" width="226" height="28" rx="7" fill="#e7f1fb" stroke="#a5c8ee"/>
+    <text x="96" y="258">SELECT customers</text>
+    <text x="280" y="258" class="tag" fill="#1971C2">DB</text>
+
+    <rect x="86" y="280" width="226" height="28" rx="7" fill="#efeafe" stroke="#c4b5fd"/>
+    <text x="96" y="298">support_agent</text>
+    <text x="268" y="298" class="tag" fill="#6741D9">AGENT</text>
+
+    <rect x="112" y="320" width="226" height="28" rx="7" fill="#efeafe" stroke="#c4b5fd"/>
+    <text x="122" y="338">ChatCompletion</text>
+    <text x="306" y="338" class="tag" fill="#6741D9">LLM</text>
+
+    <rect x="112" y="360" width="226" height="28" rx="7" fill="#efeafe" stroke="#c4b5fd"/>
+    <text x="122" y="378">get_order_status</text>
+    <text x="298" y="378" class="tag" fill="#6741D9">TOOL</text>
+
+    <rect x="138" y="400" width="226" height="28" rx="7" fill="#e7f1fb" stroke="#a5c8ee"/>
+    <text x="148" y="418">SELECT orders</text>
+    <text x="332" y="418" class="tag" fill="#1971C2">DB</text>
+
+    <rect x="112" y="440" width="226" height="28" rx="7" fill="#efeafe" stroke="#c4b5fd"/>
+    <text x="122" y="458">execute_tool get_weather</text>
+    <text x="298" y="458" class="tag" fill="#6741D9">TOOL</text>
+
+    <rect x="138" y="480" width="226" height="28" rx="7" fill="#e7f1fb" stroke="#a5c8ee"/>
+    <text x="148" y="498">GET api.open-meteo.com</text>
+    <text x="320" y="498" class="tag" fill="#1971C2">HTTP</text>
+
+    <rect x="112" y="520" width="226" height="28" rx="7" fill="#efeafe" stroke="#c4b5fd"/>
+    <text x="122" y="538">ChatCompletion</text>
+    <text x="306" y="538" class="tag" fill="#6741D9">LLM</text>
+  </g>
+
+  <rect x="60" y="570" width="150" height="40" rx="8" fill="#fff4e6" stroke="#ffc078"/>
+  <text x="72" y="588" class="span">Logs</text>
+  <text x="72" y="603" class="card-sub">trace_id + span_id</text>
+  <rect x="222" y="570" width="158" height="40" rx="8" fill="#ebfbee" stroke="#8ce99a"/>
+  <text x="234" y="588" class="span">Metrics</text>
+  <text x="234" y="603" class="card-sub">counters, histograms</text>
+
+  <!-- app -> collector -->
+  <path d="M400 370 H 452" stroke="#475569" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+  <text x="426" y="356" class="label" text-anchor="middle">OTLP</text>
+  <text x="426" y="392" class="label mono" font-size="10" text-anchor="middle">4317</text>
+  <text x="426" y="405" class="label mono" font-size="10" text-anchor="middle">4318</text>
+
+  <!-- ============ Collector ============ -->
+  <g filter="url(#shadow)">
+    <rect x="460" y="110" width="400" height="520" rx="14" fill="#ffffff" stroke="#e2e8f0"/>
+  </g>
+  <text x="482" y="142" class="card-title">OpenTelemetry Collector</text>
+  <text x="482" y="160" class="card-sub">Dynatrace distribution or otelcol-contrib</text>
+
+  <!-- traces/in -->
+  <rect x="482" y="180" width="356" height="92" rx="10" fill="#f1f5f9" stroke="#cbd5e1"/>
+  <text x="496" y="200" class="proc" font-weight="700">traces/in</text>
+  <text x="566" y="200" class="label">shared, runs once</text>
+  <g class="proc" font-size="11.5">
+    <rect x="496" y="212" width="98" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="505" y="228">memory_limiter</text>
+    <rect x="602" y="212" width="98" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-dasharray="4 3"/><text x="611" y="228">tail_sampling</text>
+    <rect x="708" y="212" width="50" height="24" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="718" y="228">batch</text>
+    <rect x="766" y="212" width="60" height="24" rx="6" fill="#0f172a"/><text x="774" y="228" fill="#ffffff">forward</text>
+  </g>
+  <text x="496" y="258" class="label">same sampling decision for both backends</text>
+
+  <!-- fan-out arrows -->
+  <path d="M786 236 V 312" stroke="#1971C2" stroke-width="1.6" fill="none" marker-end="url(#arrow-dt)"/>
+  <path d="M826 224 H 848 V 422 H 786 V 432" stroke="#6741D9" stroke-width="1.6" fill="none" marker-end="url(#arrow-ai)"/>
+
+  <!-- traces/dynatrace -->
+  <rect x="482" y="316" width="356" height="92" rx="10" fill="#e7f1fb" stroke="#a5c8ee"/>
+  <text x="496" y="336" class="proc" font-weight="700">traces/dynatrace</text>
+  <text x="610" y="336" class="label">all spans</text>
+  <g class="proc" font-size="11.5">
+    <rect x="496" y="348" width="186" height="24" rx="6" fill="#ffffff" stroke="#a5c8ee"/><text x="505" y="364">transform: redact AI content</text>
+    <rect x="690" y="348" width="136" height="24" rx="6" fill="#ffffff" stroke="#a5c8ee"/><text x="699" y="364">otlp_http/dynatrace</text>
+  </g>
+  <text x="496" y="394" class="label">input.value, output.value, llm.*_messages removed</text>
+
+  <!-- traces/arize -->
+  <rect x="482" y="436" width="356" height="92" rx="10" fill="#efeafe" stroke="#c4b5fd"/>
+  <text x="496" y="456" class="proc" font-weight="700">traces/arize</text>
+  <text x="580" y="456" class="label">AI spans, plus the trace root</text>
+  <g class="proc" font-size="11.5">
+    <rect x="496" y="468" width="116" height="24" rx="6" fill="#ffffff" stroke="#c4b5fd"/><text x="505" y="484">filter: AI only</text>
+    <rect x="620" y="468" width="96" height="24" rx="6" fill="#ffffff" stroke="#c4b5fd"/><text x="629" y="484">root as CHAIN</text>
+    <rect x="724" y="468" width="102" height="24" rx="6" fill="#ffffff" stroke="#c4b5fd"/><text x="733" y="484">otlp_grpc/arize</text>
+  </g>
+  <text x="496" y="514" class="label">root is sent only for traces that contain AI spans</text>
+
+  <!-- metrics + logs -->
+  <rect x="482" y="546" width="174" height="62" rx="10" fill="#ebfbee" stroke="#8ce99a"/>
+  <text x="496" y="566" class="proc" font-weight="700">metrics</text>
+  <text x="496" y="586" class="proc mono" font-size="11">cumulative_to_delta</text>
+  <text x="496" y="600" class="label">Dynatrace needs delta</text>
+  <rect x="664" y="546" width="174" height="62" rx="10" fill="#fff4e6" stroke="#ffc078"/>
+  <text x="678" y="566" class="proc" font-weight="700">logs</text>
+  <text x="678" y="586" class="proc mono" font-size="11">batch</text>
+  <text x="678" y="600" class="label">trace_id kept as-is</text>
+
+  <!-- collector -> backends -->
+  <path d="M838 362 C 880 362, 880 250, 912 250" stroke="#1971C2" stroke-width="2" fill="none" marker-end="url(#arrow-dt)"/>
+  <path d="M838 577 C 890 577, 880 300, 912 300" stroke="#1971C2" stroke-width="1.4" stroke-dasharray="5 4" fill="none" marker-end="url(#arrow-dt)"/>
+  <path d="M838 482 C 880 482, 880 500, 912 500" stroke="#6741D9" stroke-width="2" fill="none" marker-end="url(#arrow-ai)"/>
+
+  <!-- ============ Dynatrace ============ -->
+  <g filter="url(#shadow)">
+    <rect x="920" y="160" width="320" height="200" rx="14" fill="#ffffff" stroke="#a5c8ee"/>
+  </g>
+  <rect x="920" y="160" width="320" height="6" rx="3" fill="#1971C2"/>
+  <text x="942" y="194" class="card-title">Dynatrace</text>
+  <text x="942" y="212" class="card-sub mono" font-size="11">OTLP/HTTP  {env}.live.dynatrace.com</text>
+  <g class="span">
+    <circle cx="948" cy="238" r="4" fill="#1971C2"/><text x="960" y="242">All 9 spans, one tree (AI content redacted)</text>
+    <circle cx="948" cy="264" r="4" fill="#f08c00"/><text x="960" y="268">Logs linked by trace_id / span_id</text>
+    <circle cx="948" cy="290" r="4" fill="#2f9e44"/><text x="960" y="294">Metrics (delta temporality)</text>
+  </g>
+  <text x="942" y="326" class="label">fetch spans | filter trace.id == toUid("...")</text>
+  <text x="942" y="344" class="label">fetch logs | filter trace_id == "..."</text>
+
+  <!-- ============ Arize AX ============ -->
+  <g filter="url(#shadow)">
+    <rect x="920" y="400" width="320" height="200" rx="14" fill="#ffffff" stroke="#c4b5fd"/>
+  </g>
+  <rect x="920" y="400" width="320" height="6" rx="3" fill="#6741D9"/>
+  <text x="942" y="434" class="card-title">Arize AX</text>
+  <text x="942" y="452" class="card-sub mono" font-size="11">OTLP/gRPC  otlp.arize.com:443</text>
+  <g class="span">
+    <circle cx="948" cy="478" r="4" fill="#6741D9"/><text x="960" y="482">AI spans: AGENT, LLM, TOOL, CHAIN root</text>
+    <circle cx="948" cy="504" r="4" fill="#6741D9"/><text x="960" y="508">Full prompts, responses, token cost</text>
+    <circle cx="948" cy="530" r="4" fill="#6741D9"/><text x="960" y="534">One project: openinference.project.name</text>
+  </g>
+  <text x="942" y="566" class="label">ax spans export &lt;project&gt; --trace-id ...</text>
+  <text x="942" y="584" class="label">every trace has one root, listed in Traces</text>
+
+  <!-- shared trace id badge -->
+  <rect x="980" y="370" width="200" height="22" rx="11" fill="#0f172a"/>
+  <text x="1080" y="385" text-anchor="middle" font-size="11" fill="#ffffff" class="mono">same trace id in both</text>
+
+  <!-- Legend -->
+  <g transform="translate(40, 662)">
+    <rect width="14" height="14" rx="3" fill="#efeafe" stroke="#c4b5fd"/><text x="22" y="12" class="legend">AI span (OpenInference / gen_ai.*)</text>
+    <rect x="260" width="14" height="14" rx="3" fill="#e7f1fb" stroke="#a5c8ee"/><text x="282" y="12" class="legend">APM span (HTTP, DB, internal)</text>
+    <rect x="500" width="14" height="14" rx="3" fill="#fff4e6" stroke="#ffc078"/><text x="522" y="12" class="legend">Logs</text>
+    <rect x="580" width="14" height="14" rx="3" fill="#ebfbee" stroke="#8ce99a"/><text x="602" y="12" class="legend">Metrics</text>
+    <rect x="680" width="14" height="14" rx="3" fill="#ffffff" stroke="#cbd5e1" stroke-dasharray="4 3"/><text x="702" y="12" class="legend">Optional</text>
+    <text x="800" y="12" class="legend">No collector? Same split with two span processors in one TracerProvider.</text>
+  </g>
+</svg>

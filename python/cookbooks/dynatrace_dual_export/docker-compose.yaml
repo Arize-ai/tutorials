@@ -1,0 +1,18 @@
+# Collector only. The example app runs on the host and sends to localhost:4318.
+#   cp .env.example .env   # fill in
+#   docker compose up -d
+#   docker compose logs -f otel-collector
+services:
+  otel-collector:
+    # Dynatrace distribution. Same config works with otel/opentelemetry-collector-contrib.
+    image: ghcr.io/dynatrace/dynatrace-otel-collector/dynatrace-otel-collector:0.60.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./collector/config.yaml:/etc/otelcol/config.yaml:ro
+    env_file: .env
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "13133:13133" # health_check
+      - "8888:8888"   # collector self-metrics (Prometheus)
+    restart: unless-stopped

@@ -1,0 +1,185 @@
+# OpenTelemetry Collector: one OTLP endpoint in, Dynatrace and Arize AX out.
+#
+#   Dynatrace  all spans (AI prompt and response content removed), all metrics, all logs
+#   Arize AX   AI spans (OpenInference or OTel GenAI semantic conventions), plus the
+#              trace's root span tagged as a CHAIN so every trace has a root in Arize
+#
+# Both backends receive the same trace ids because the collector never rewrites them.
+# Memory limiting, batching, and optional tail sampling run once in traces/in, before
+# the fan-out, so both backends see the same sampling decisions.
+#
+# Works with the Dynatrace distribution and otelcol-contrib built on collector v0.146 or
+# later (filter `trace_conditions` syntax). Tested with dynatrace-otel-collector 0.60.0
+# and otelcol-contrib 0.165.0.
+#
+# Required environment variables (see collector/.env.example):
+#   ARIZE_SPACE_ID, ARIZE_API_KEY, DYNATRACE_ENV_URL, DYNATRACE_API_TOKEN
+# Optional:
+#   ARIZE_PROJECT_NAME (default "default"), DYNATRACE_AUTH_SCHEME (default "Bearer"),
+#   ARIZE_ROOT_DECISION_WAIT (default "30s")
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 80
+    spike_limit_percentage: 25
+
+  batch: {}
+
+  # traces/arize: drop every span that is not an AI span. Conditions are "drop if true".
+  # Arize ingests OTel GenAI (gen_ai.*) spans natively, so those are kept as well.
+  filter/ai-spans-only:
+    error_mode: ignore
+    trace_conditions:
+      - >-
+        span.attributes["openinference.span.kind"] == nil and
+        span.attributes["gen_ai.operation.name"] == nil and
+        span.attributes["gen_ai.request.model"] == nil and
+        span.attributes["gen_ai.tool.name"] == nil
+
+  # traces/arize-root: Arize lists traces by their root span. The top AI span usually has
+  # an APM parent (the HTTP server span) that filter/ai-spans-only drops, so this branch
+  # sends that root span too, tagged as an OpenInference CHAIN. It runs only for traces
+  # that contain an AI span; requests without AI spans send nothing to Arize.
+  # Stateful: all spans of a trace must reach the same collector instance.
+  tail_sampling/traces-with-ai-spans:
+    decision_wait: ${env:ARIZE_ROOT_DECISION_WAIT:-30s}
+    num_traces: 50000
+    # Keeps the decision for root spans that arrive after decision_wait (long requests).
+    decision_cache:
+      sampled_cache_size: 100000
+    policies:
+      - name: has-ai-span
+        type: ottl_condition
+        ottl_condition:
+          error_mode: ignore
+          span:
+            - attributes["openinference.span.kind"] != nil
+            - attributes["gen_ai.operation.name"] != nil
+            - attributes["gen_ai.request.model"] != nil
+            - attributes["gen_ai.tool.name"] != nil
+
+  # Keep only the trace root, and only if it is not already an AI span (those take the
+  # traces/arize path).
+  filter/non-ai-trace-root:
+    error_mode: ignore
+    trace_conditions:
+      - span.parent_span_id != SpanID(0x0000000000000000)
+      - span.attributes["openinference.span.kind"] != nil
+      - span.attributes["gen_ai.operation.name"] != nil
+      - span.attributes["gen_ai.request.model"] != nil
+      - span.attributes["gen_ai.tool.name"] != nil
+
+  transform/root-as-chain:
+    error_mode: ignore
+    trace_statements:
+      - set(span.attributes["openinference.span.kind"], "CHAIN")
+
+  # Arize groups traces by project. Apps can set the resource attribute themselves;
+  # "insert" never overwrites it.
+  resource/arize-project:
+    attributes:
+      - key: openinference.project.name
+        value: ${env:ARIZE_PROJECT_NAME:-default}
+        action: insert
+
+  # traces/dynatrace: keep AI spans (so the Dynatrace trace tree has no gaps) but drop
+  # prompt and completion content, which lives in Arize. Model names, token counts,
+  # tool names, and timings stay. Remove this processor to send content to both.
+  transform/redact-ai-content:
+    error_mode: ignore
+    trace_statements:
+      - delete_key(span.attributes, "input.value")
+      - delete_key(span.attributes, "output.value")
+      - delete_key(span.attributes, "llm.prompt_template.variables")
+      - delete_matching_keys(span.attributes, "^llm\\.(input|output)_messages\\.")
+      - delete_matching_keys(span.attributes, "^llm\\.prompts?\\.")
+      - delete_matching_keys(span.attributes, "^gen_ai\\.(input|output)\\.messages$")
+      - delete_key(span.attributes, "gen_ai.system_instructions")
+      - delete_matching_keys(span.attributes, "^gen_ai\\.tool\\.call\\.(arguments|result)$")
+
+  # Dynatrace ingests delta metrics. Stateful: send a given metric stream to the same
+  # collector instance.
+  cumulative_to_delta:
+    max_staleness: 15m
+
+connectors:
+  # Copies traces/in into every pipeline that lists it as a receiver.
+  forward/traces: {}
+  # Joins the two Arize branches in front of one exporter.
+  forward/arize: {}
+
+exporters:
+  otlp_http/dynatrace:
+    endpoint: ${env:DYNATRACE_ENV_URL}/api/v2/otlp
+    headers:
+      # Platform token (dt0s16.*): Bearer. Access token (dt0c01.*): Api-Token.
+      Authorization: "${env:DYNATRACE_AUTH_SCHEME:-Bearer} ${env:DYNATRACE_API_TOKEN}"
+
+  otlp_grpc/arize:
+    endpoint: otlp.arize.com:443
+    headers:
+      space_id: ${env:ARIZE_SPACE_ID}
+      api_key: ${env:ARIZE_API_KEY}
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces/in:
+      receivers: [otlp]
+      # Optional: add tail_sampling here (see docs/collector.md) so both backends
+      # keep exactly the same traces.
+      processors: [memory_limiter, batch]
+      exporters: [forward/traces]
+
+    traces/dynatrace:
+      receivers: [forward/traces]
+      processors: [transform/redact-ai-content]
+      exporters: [otlp_http/dynatrace]
+
+    traces/arize:
+      receivers: [forward/traces]
+      processors: [filter/ai-spans-only]
+      exporters: [forward/arize]
+
+    traces/arize-root:
+      receivers: [forward/traces]
+      processors: [tail_sampling/traces-with-ai-spans, filter/non-ai-trace-root, transform/root-as-chain]
+      exporters: [forward/arize]
+
+    traces/arize-out:
+      receivers: [forward/arize]
+      processors: [resource/arize-project]
+      exporters: [otlp_grpc/arize]
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, cumulative_to_delta, batch]
+      exporters: [otlp_http/dynatrace]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [otlp_http/dynatrace]
+
+  telemetry:
+    metrics:
+      # Self-metrics (otelcol_exporter_sent_spans, ..._send_failed_spans) on :8888/metrics.
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
