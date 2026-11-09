@@ -23,6 +23,7 @@
 This repository contains tutorials and examples demonstrating how to leverage Arize for your AI observability needs across:
 
 - **Tracing** - Understand your LLM and ML systems with comprehensive traces
+  - [Send telemetry to Arize AX and Dynatrace](https://arize.com/docs/ax/cookbooks/instrument/send-telemetry-to-arize-and-dynatrace) ([runnable Python cookbook](python/cookbooks/dynatrace_dual_export/README.md))
 - **Evaluations** - Benchmark and improve your models with advanced evaluation techniques
   - [Use TypeSafe Jev as an Arize AX remote evaluator](https://arize.com/docs/ax/cookbooks/evaluate/jev-remote-evaluator) ([runnable Python cookbook](python/cookbooks/jev_remote_evaluator/README.md))
   - [Find and fix issues in your AI app with a coding agent](https://arize.com/docs/ax/cookbooks/improve/find-and-fix-issues-with-a-coding-agent) ([runnable Python cookbook](python/cookbooks/find_and_fix_with_coding_agent/README.md))

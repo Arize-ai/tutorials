@@ -1,0 +1,16 @@
+# Debug overlay: also print what each backend receives.
+#   otelcol-contrib --config collector/config.yaml --config collector/debug.yaml
+# Lists are replaced, not merged, so the exporters lists are restated in full.
+
+exporters:
+  debug/dynatrace:
+    verbosity: detailed
+  debug/arize:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces/dynatrace:
+      exporters: [otlp_http/dynatrace, debug/dynatrace]
+    traces/arize-out:
+      exporters: [otlp_grpc/arize, debug/arize]

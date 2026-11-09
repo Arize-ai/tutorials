@@ -1,0 +1,13 @@
+# Tested versions (Python 3.13). >= pins keep the example working on newer releases.
+openai>=3.48.0
+openinference-instrumentation-openai>=0.1.69
+openinference-semantic-conventions>=0.1.43
+opentelemetry-sdk>=1.45.2
+opentelemetry-exporter-otlp-proto-http>=1.45.2
+opentelemetry-instrumentation-fastapi>=0.66b2
+opentelemetry-instrumentation-httpx>=0.66b2
+opentelemetry-instrumentation-sqlite3>=0.66b2
+fastapi>=0.162
+uvicorn>=0.30
+httpx>=0.28
+python-dotenv>=1.0

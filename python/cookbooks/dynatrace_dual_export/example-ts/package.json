@@ -1,0 +1,32 @@
+{
+  "name": "ax-dt-example-ts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^4.0.93",
+    "@ai-sdk/otel": "^1.0.139",
+    "@arizeai/openinference-semantic-conventions": "^2.14.0",
+    "@arizeai/openinference-vercel": "^3.3.0",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/api-logs": "^0.223.0",
+    "@opentelemetry/exporter-logs-otlp-proto": "^0.223.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.223.0",
+    "@opentelemetry/exporter-metrics-otlp-proto": "^0.223.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "^0.223.0",
+    "@opentelemetry/resources": "^2.12.0",
+    "@opentelemetry/sdk-logs": "^0.223.0",
+    "@opentelemetry/sdk-metrics": "^2.12.0",
+    "@opentelemetry/sdk-trace-base": "^2.12.0",
+    "@opentelemetry/sdk-trace-node": "^2.12.0",
+    "ai": "^7.0.139",
+    "tsx": "^4.20.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  }
+}
