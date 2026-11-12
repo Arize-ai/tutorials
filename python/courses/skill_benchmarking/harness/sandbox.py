@@ -24,7 +24,6 @@ from pathlib import Path
 
 from harness.config import COURSE_DIR
 
-
 # Claude Code hook events that coding-harness-tracing listens to.
 HOOK_EVENTS = {
     "SessionStart": "arize-hook-session-start",

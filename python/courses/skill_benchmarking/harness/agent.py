@@ -104,7 +104,7 @@ async def run_agent(request: str, skill_dir: Path, project: str) -> AgentRun:
         )
         try:
             stdout, stderr = await asyncio.wait_for(proc.communicate(), TIMEOUT_SECONDS)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             return AgentRun("", session_id, error=f"Timed out after {TIMEOUT_SECONDS}s")
         response, tools, result = _parse_stream(stdout.decode())

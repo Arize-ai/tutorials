@@ -22,14 +22,22 @@ import json
 import tempfile
 import time
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pandas as pd
 
 from harness.agent import run_agent
-from harness.ax import (JUDGE_COLUMN, agent_traces, eval_names, find_experiment, require_dataset, run_judge,
-                        traces_project, traces_project_id)
+from harness.ax import (
+    JUDGE_COLUMN,
+    agent_traces,
+    eval_names,
+    find_experiment,
+    require_dataset,
+    run_judge,
+    traces_project,
+    traces_project_id,
+)
 from harness.config import COURSE_DIR, arize_client, settings
 from harness.links import add_session_footer
 
@@ -37,6 +45,11 @@ from harness.links import add_session_footer
 def load_evaluators(module_name: str) -> list:
     module = importlib.import_module(module_name)
     return list(module.EVALUATORS)
+
+
+def _append_log(log_path: Path, record: dict) -> None:
+    with open(log_path, "a") as f:
+        f.write(json.dumps(record) + "\n")
 
 
 async def run_all(examples, skill_dir: Path, project: str, log_path: Path, concurrency: int) -> list[dict]:
@@ -52,10 +65,9 @@ async def run_all(examples, skill_dir: Path, project: str, log_path: Path, concu
         done += 1
         print(f"  {done}/{len(examples)} {row.get('request_id')} rep {row.get('rep')}"
               + (f": {run.error}" if run.error else ""))
-        with open(log_path, "a") as f:
-            f.write(json.dumps({"request_id": row.get("request_id"), "rep": row.get("rep"),
-                                "session_id": run.session_id, "tools": run.tools, "cost_usd": run.cost_usd,
-                                "error": run.error, "response": run.response}) + "\n")
+        await asyncio.to_thread(_append_log, log_path, {
+            "request_id": row.get("request_id"), "rep": row.get("rep"), "session_id": run.session_id,
+            "tools": run.tools, "cost_usd": run.cost_usd, "error": run.error, "response": run.response})
         # A harness error (timeout, crash) isn't a skill failure, so it's counted separately and
         # not scored.
         # latency, token_count, and total_cost are the columns Arize AX's own experiment runner
@@ -125,7 +137,7 @@ def print_summary(rows: list[dict]) -> None:
     print(f"\n{len(rows)} runs, {len(errors)} harness errors")
     for name in eval_names(rows):
         values = [r.get(f"eval.{name}.score") for r in scored]
-        scores = [float(x) for x in values if x is not None and x == x]
+        scores = [float(x) for x in values if x is not None and pd.notna(x)]
         # Runs an evaluator skips (no score, label not_applicable) are ignored, not failed.
         ignored = len(values) - len(scores)
         if scores:
@@ -172,9 +184,9 @@ def main() -> None:
 
     print(f"Running {args.skill.name} from {args.skill} on {args.dataset!r} with {s.agent_model}")
     started = time.time()
-    start = datetime.now(timezone.utc)
+    start = datetime.now(UTC)
     runs = asyncio.run(run_all(examples, args.skill.resolve(), project, log_path, args.concurrency))
-    end = datetime.now(timezone.utc)
+    end = datetime.now(UTC)
     print(f"Agent runs finished in {time.time() - started:.0f}s")
 
     sessions = {r["session_id"] for r in runs if not r["error"]}

@@ -124,9 +124,18 @@ def run_judge(client, s: Settings, project: str, project_id: str, session_ids: s
     {input} and {output} from the root span (the request and the agent's answer) and
     {tool_results} from every tool span, which is where the campaign list is if the agent read it.
     """
-    from arize._generated.api_client.models.task_query_mapping_input import TaskQueryMappingInput
-    from arize._generated.api_client.models.trace_or_session_evaluator_input import TraceOrSessionEvaluatorInput
-    from arize.tasks.types import TaskEvaluatorInput, TaskQueryFilter, TaskQueryFilters, TaskType
+    from arize._generated.api_client.models.task_query_mapping_input import (
+        TaskQueryMappingInput,
+    )
+    from arize._generated.api_client.models.trace_or_session_evaluator_input import (
+        TraceOrSessionEvaluatorInput,
+    )
+    from arize.tasks.types import (
+        TaskEvaluatorInput,
+        TaskQueryFilter,
+        TaskQueryFilters,
+        TaskType,
+    )
 
     judge = find_judge(client, s)
     if judge is None:
