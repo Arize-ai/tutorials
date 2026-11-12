@@ -1,0 +1,26 @@
+request_id,request,expected_source,expected_medium,expected_campaign,expected_content,expected_links,keep_params,fragment,should_decline
+r01-linkedin-basic,Make me a UTM link for https://brindlewick.example.com/pricing. I'm posting it on LinkedIn for the spring launch.,linkedin,social,spring-launch,,1,,,false
+r02-twitter-alias,Need a tracking link for https://brindlewick.example.com/blog/how-acme-ships-faster to post on Twitter. It's part of our customer stories campaign.,x,social,customer-stories,,1,,,false
+r03-newsletter,Can you create a UTM link for https://brindlewick.example.com/webinars/roadmap-q3? It's going in this week's newsletter to promote our webinar series.,newsletter,email,webinar-series,,1,,,false
+r04-youtube,Create a UTM link for https://brindlewick.example.com/templates for the description of our new YouTube video. Campaign is brand awareness.,youtube,social,brand-awareness,,1,,,false
+r05-google-ads,"I need the landing page URL for a Google search ad pointing at https://brindlewick.example.com/demo, for the spring launch campaign.",google,cpc,spring-launch,,1,,,false
+r06-g2,Make a UTM link for the website link on our G2 profile. It should go to https://brindlewick.example.com/signup and count toward brand awareness.,g2,review-site,brand-awareness,,1,,,false
+r07-partner-zapier,Zapier is writing a blog post about our new integration. Give me a UTM link for https://brindlewick.example.com/integrations/zapier that they can use. This is for the integrations launch.,partner,partner,integrations-launch,zapier,1,,,false
+r08-facebook-paid,We're running a paid Facebook ad for the spring launch. Create the UTM link for https://brindlewick.example.com/pricing.,facebook,paid-social,spring-launch,,1,,,false
+r09-linkedin-ad,Create a UTM link for a sponsored LinkedIn ad that sends people to https://brindlewick.example.com/demo. Campaign: Spring Launch.,linkedin,paid-social,spring-launch,,1,,,false
+r10-conference-qr,We need a UTM link for the QR code on our booth banner at a conference next month. It goes to https://brindlewick.example.com/demo and is part of brand awareness.,conference,event,brand-awareness,,1,,,false
+r11-capterra,Make me a UTM link for our Capterra listing pointing to https://brindlewick.example.com/signup. Brand awareness campaign.,capterra,review-site,brand-awareness,,1,,,false
+r12-two-placements,"I need two UTM links to https://brindlewick.example.com/webinars/roadmap-q3 for the same newsletter, one for the header banner and one for the button at the bottom. It's for the webinar series.",newsletter,email,webinar-series,,2,,,false
+r13-customer-email,"We're emailing our customer list about the new Zapier integration. Create a UTM link to https://brindlewick.example.com/integrations/zapier for that email, integrations launch campaign.",newsletter,email,integrations-launch,,1,,,false
+r14-li-abbrev,"utm link for an LI post pls: https://brindlewick.example.com/blog/how-acme-ships-faster, customer stories",linkedin,social,customer-stories,,1,,,false
+r15-existing-query,Make a UTM link for https://brindlewick.example.com/pricing?plan=team for a LinkedIn post about the spring launch.,linkedin,social,spring-launch,,1,plan=team,,false
+r16-stale-utms,I copied this link from an old email: https://brindlewick.example.com/demo?utm_source=newsletter&utm_medium=email&utm_campaign=holiday-promo-2025. Can you turn it into a link for an X post for the spring launch?,x,social,spring-launch,,1,,,false
+r17-anchor,Create a UTM link for https://brindlewick.example.com/docs/getting-started#install. It's going in the newsletter for brand awareness.,newsletter,email,brand-awareness,,1,,install,false
+r18-query-and-anchor,UTM link please for https://brindlewick.example.com/integrations?category=automation#zapier. Our partner Zapier will put it in their newsletter. Integrations launch.,partner,partner,integrations-launch,zapier,1,category=automation,zapier,false
+r19-person-linkedin,Dana Lee is going to share https://brindlewick.example.com/blog/how-acme-ships-faster on her LinkedIn. Can you make her a UTM link? Customer stories campaign.,linkedin,social,customer-stories,dana,1,,,false
+r20-person-x,Our CEO Priya Shah wants to tweet https://brindlewick.example.com/pricing for the spring launch. Make her a tracking link.,x,social,spring-launch,priya,1,,,false
+r21-internal-nav,Give me a UTM link for the Pricing link in our website's top navigation menu. It points to https://brindlewick.example.com/pricing.,,,,,1,,,true
+r22-campaign-variant-a,Make a UTM link to https://brindlewick.example.com/demo for a YouTube video. It's for our spring release.,youtube,social,spring-launch,,1,,,false
+r23-campaign-variant-b,"Create a UTM link for https://brindlewick.example.com/signup for the newsletter, campaign is our spring product launch.",newsletter,email,spring-launch,,1,,,false
+r24-campaign-caps,Tracking link for https://brindlewick.example.com/blog/how-acme-ships-faster in a Facebook post (not paid). Campaign: Customer Stories.,facebook,social,customer-stories,,1,,,false
+r25-webinar-variant,Create a UTM link to https://brindlewick.example.com/webinars/roadmap-q3 for a LinkedIn post promoting the Q3 roadmap webinar.,linkedin,social,webinar-series,,1,,,false

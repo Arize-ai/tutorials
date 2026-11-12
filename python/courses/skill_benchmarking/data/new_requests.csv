@@ -1,0 +1,4 @@
+request_id,request,expected_source,expected_medium,expected_campaign,expected_content,expected_links,keep_params,fragment,should_decline
+h1-new-partner,Slack is featuring our new integration in their app directory newsletter. Can you make a UTM link for https://brindlewick.example.com/integrations/slack?,partner,partner,integrations-launch,slack,1,,,false
+h2-ended-campaign,Make a UTM link for https://brindlewick.example.com/pricing for a Facebook post about our holiday promo.,,,,,1,,,true
+h3-person-at-conference,Priya Shah is giving a talk at a conference and wants a QR code on her last slide pointing to https://brindlewick.example.com/templates. Brand awareness. Make the UTM link.,conference,event,brand-awareness,priya,1,,,false
