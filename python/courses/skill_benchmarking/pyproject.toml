@@ -1,0 +1,14 @@
+[project]
+name = "brindlewick-skill-benchmark"
+version = "0.1.0"
+description = "Measure and improve a coding agent skill with Arize AX: the companion code for the Arize AX skill benchmarking course"
+requires-python = ">=3.11"
+dependencies = [
+    "arize>=8.64.0",
+    "coding-harness-tracing @ git+https://github.com/Arize-ai/coding-harness-tracing@093943feba7624e6c1e6a5e41ce6a8d75e98f94d",
+    "pandas>=2.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.uv]
+package = false

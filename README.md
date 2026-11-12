@@ -27,6 +27,8 @@ This repository contains tutorials and examples demonstrating how to leverage Ar
 - **Evaluations** - Benchmark and improve your models with advanced evaluation techniques
   - [Use TypeSafe Jev as an Arize AX remote evaluator](https://arize.com/docs/ax/cookbooks/evaluate/jev-remote-evaluator) ([runnable Python cookbook](python/cookbooks/jev_remote_evaluator/README.md))
   - [Find and fix issues in your AI app with a coding agent](https://arize.com/docs/ax/cookbooks/improve/find-and-fix-issues-with-a-coding-agent) ([runnable Python cookbook](python/cookbooks/find_and_fix_with_coding_agent/README.md))
+- **Courses** - Multi-lesson, hands-on courses
+  - [Measure and improve a coding agent skill](https://arize.com/docs/ax/cookbooks/tutorials/measure-and-improve-a-skill/overview) ([runnable Python course](python/courses/skill_benchmarking/README.md))
 - **Datasets** - Create and manage datasets for testing and fine-tuning
 - **Experiments** - Track changes and compare performance across model versions
 - **Guardrails** - Implement safeguards for responsible AI deployment
