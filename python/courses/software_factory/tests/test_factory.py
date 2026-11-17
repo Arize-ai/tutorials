@@ -8,7 +8,7 @@ from openai_codex.generated.v2_all import (
     FileChangeThreadItem,
 )
 
-from factory import agent, tracing
+from factory import agent, backlog, tracing
 from factory.stations import release, review, router, spec
 
 
@@ -45,7 +45,7 @@ def test_agent_env_sends_traces_to_the_factory_project_with_safe_attributes(monk
         {
             "issue": 7,
             "station": "build",
-            "repo": "me/ship-it-card",
+            "repo": "me/helpdesk",
             "note": "a, b=c",
             "vid": "UHJvbXB0==",
             "empty": "",
@@ -57,7 +57,7 @@ def test_agent_env_sends_traces_to_the_factory_project_with_safe_attributes(monk
     assert pairs == {
         "factory.issue": "7",
         "factory.station": "build",
-        "factory.repo": "me/ship-it-card",
+        "factory.repo": "me/helpdesk",
         "factory.note": "a_ b=c",
         "factory.vid": "UHJvbXB0==",
     }
@@ -81,11 +81,11 @@ def test_describe_item_labels_tool_calls_only(tmp_path):
             "type": "fileChange",
             "status": "completed",
             "changes": [
-                {"path": str(tmp_path / "shipit" / "stats.py"), "kind": {"type": "update"}, "diff": ""}
+                {"path": str(tmp_path / "helpdesk" / "services.py"), "kind": {"type": "update"}, "diff": ""}
             ],
         }
     )
-    assert agent.describe_item(change, tmp_path) == "edit " + str(Path("shipit") / "stats.py")
+    assert agent.describe_item(change, tmp_path) == "edit " + str(Path("helpdesk") / "services.py")
     msg = AgentMessageThreadItem.model_validate({"id": "3", "type": "agentMessage", "text": "hi"})
     assert agent.describe_item(msg, tmp_path) == ""
 
@@ -93,7 +93,7 @@ def test_describe_item_labels_tool_calls_only(tmp_path):
 def _evidence(**over):
     ev = {
         "spec_risk": "low",
-        "files_changed": ["shipit/stats.py"],
+        "files_changed": ["helpdesk/services.py"],
         "diff_lines": 20,
         "tests_delta": 1,
         "ci_runs": 1,
@@ -122,6 +122,21 @@ def test_next_version():
     assert release.next_version("v0.3.4", "patch") == "v0.3.5"
     assert release.next_version("v0.3.4", "minor") == "v0.4.0"
     assert release.next_version("0.3.4", "major") == "v1.0.0"
+
+
+def test_router_rules_flag_auth_and_model_changes():
+    hits = router.rules(_evidence(files_changed=["helpdesk/deps.py", "helpdesk/models.py"]))
+    assert hits == ["sensitive files: helpdesk/deps.py, helpdesk/models.py"]
+
+
+def test_backlog_parses_and_routes_are_known():
+    items = backlog.items()
+    assert len(items) == 10
+    assert len({it.key for it in items}) == 10
+    for it in items:
+        assert it.expect in {"automerge", "human"}, it.key
+        assert it.title and it.why and it.body, it.key
+        assert "expect:" not in it.body and "why:" not in it.body, it.key
 
 
 def test_sandbox_overrides(monkeypatch):

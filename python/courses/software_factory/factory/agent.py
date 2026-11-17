@@ -81,7 +81,7 @@ async def run_agent(
     on_tool: Callable[[str], None] | None = None,
 ) -> AgentResult:
     """Run one agent turn to completion. on_tool gets a one-line summary of each tool
-    call, e.g. "$ uv run pytest" or "edit shipit/stats.py"."""
+    call, e.g. "$ uv run pytest" or "edit helpdesk/services.py"."""
     codex_config = CodexConfig(
         cwd=str(cwd),
         env=tracing.agent_env(trace_attrs),

@@ -5,9 +5,15 @@ its own prompts.
 
 A software factory is a pipeline where a GitHub issue goes in and a released change
 comes out, with a Codex agent doing the work at each station. This one works on
-[ship-it-card](https://github.com/jimbobbennett/ship-it-card), a small Python app that
-turns a merged GitHub PR into a trading card. You fork it, file issues on your fork,
-and the factory takes each one from spec to release, with you as the review gate.
+[helpdesk](https://github.com/jimbobbennett/helpdesk), a multi-tenant support desk with a
+ticket API, signed webhooks and a web UI, built with FastAPI and SQLite. You fork it,
+file issues on your fork, and the factory takes each one from spec to release, with you
+as the review gate.
+
+A helpdesk makes the factory's decisions matter. Many customer workspaces share one
+database, so a query that forgets its workspace filter leaks one customer's tickets to
+another. Some changes are safe to merge on their own, and others (authentication, API
+keys, the data model) should always reach a human.
 
 ```
 issue → spec → build → CI ⟲ babysit → 3 reviewers → router → auto-merge ─┐
@@ -23,7 +29,7 @@ issue → spec → build → CI ⟲ babysit → 3 reviewers → router → auto-
 | Review ×3 | Correctness, security and tests reviewers run in parallel; verdicts are posted as PR reviews | read-only |
 | Router | The agent picks auto-merge or the review gate; a rules floor always wins | read-only |
 | Review gate | You comment `/ship` or `/changes` on the PR | (you) |
-| Release | Smoke-tests the merged commit, picks the version bump and writes notes; the factory creates the GitHub release | workspace-write |
+| Release | Smoke-tests the merged commit, picks the version bump and writes notes; the factory reruns the smoke test and creates the GitHub release | workspace-write |
 
 **Agents never write to GitHub.** They return structured JSON, and the factory does
 every commit, push, comment, merge and release, so every write is a known, logged step.
@@ -44,8 +50,8 @@ and a time limit, so a confused agent can't run up a bill.
   your fork
 - An [Arize AX](https://app.arize.com/auth/join) account, and the [`ax` CLI](https://arize.com/docs/ax/skills/install)
   logged in with a profile for your space (for Prompt Hub)
-- Your fork of [ship-it-card](https://github.com/jimbobbennett/ship-it-card), with GitHub
-  Actions enabled
+- Your fork of [helpdesk](https://github.com/jimbobbennett/helpdesk), with GitHub Actions
+  enabled
 
 ## Setup
 
@@ -63,9 +69,25 @@ Then seed Prompt Hub with the station prompts from `factory/prompts/`:
 uv run python -m factory.prompts push --promote
 ```
 
+## The backlog
+
+`backlog/` has ten helpdesk issues of known difficulty and risk: small bugs, features
+across the API and UI, security fixes, and one trap that asks for what the app must never
+do. Each one records the route the course expects the router to take, so you can compare
+runs with each other and, later, with each prompt version.
+
+```bash
+uv run python -m factory.backlog list         # the issues and their expected routes
+uv run python -m factory.backlog file         # file them all on your fork
+uv run python -m factory.backlog file 01 02   # or just some
+```
+
+Only the title and body are filed. The expected route stays in this repo, out of the
+agents' sight.
+
 ## Running the factory
 
-File an issue on your fork, then:
+File an issue on your fork (or use the backlog), then:
 
 ```bash
 uv run python -m factory.run 3            # run the factory on issue #3
@@ -140,7 +162,7 @@ Everything is read from `.env`:
 
 | Variable | Default | What it does |
 |---|---|---|
-| `FACTORY_TARGET_REPO` | (required) | Your fork, e.g. `you/ship-it-card` |
+| `FACTORY_TARGET_REPO` | (required) | Your fork, e.g. `you/helpdesk` |
 | `ARIZE_SPACE_ID`, `ARIZE_API_KEY` | unset | Arize AX credentials; without them the factory runs untraced |
 | `FACTORY_ARIZE_PROJECT` | `software-factory` | Project for the factory trace and every agent trace |
 | `FACTORY_PROMPT_PREFIX` | `software-factory` | Prompt Hub names are `<prefix>-<station>` |
@@ -151,7 +173,7 @@ Everything is read from `.env`:
 | `FACTORY_MAX_CI_FIXES` | `3` | Babysit attempts before a red PR is labeled `factory-stuck` |
 | `FACTORY_HUMAN_WAIT_S` | `0` | How long a run waits at the review gate before handing off to `--watch` |
 | `FACTORY_BIG_DIFF_LINES` | `400` | Diffs bigger than this always go to the review gate |
-| `FACTORY_SENSITIVE_PATHS` | `.github/,pyproject.toml,uv.lock,shipit/github.py` | Changes here always go to the review gate |
+| `FACTORY_SENSITIVE_PATHS` | `.github/`, `pyproject.toml`, `uv.lock`, and `helpdesk/` `deps.py`, `security.py`, `models.py`, `config.py`, `app.py` | Comma-separated; changes here always go to the review gate |
 
 Each agent also inherits your own Codex configuration in `~/.codex/config.toml`, which is
 where Codex tracing registers its `notify` hook.
@@ -165,8 +187,10 @@ factory/
   tracing.py      the factory trace, and the attributes that tie agent traces to it
   context.py      per-issue run state, saved to runs/state/
   prompts.py      Prompt Hub loader and CLI
+  backlog.py      files the course backlog on your fork
   gh.py           git and gh plumbing (the only code that writes to GitHub)
   stations/       spec, build, ci, babysit, review, router, human, release
   prompts/        station system prompts (the Prompt Hub seed)
+backlog/          ten helpdesk issues with their expected routes
 tests/            unit tests: uv run pytest
 ```

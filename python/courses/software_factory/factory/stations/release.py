@@ -6,7 +6,9 @@ GitHub release, so tags are never invented by a model.
 
 from __future__ import annotations
 
+import asyncio
 import re
+import subprocess
 
 from .. import config, gh
 from . import _agent
@@ -46,11 +48,13 @@ def next_version(current: str | None, bump: str) -> str:
     return f"v{major}.{minor}.{patch + 1}"
 
 
+SMOKE = ("uv", "run", "python", "-m", "helpdesk", "smoke")
+
+
 async def run(ctx, merge_sha: str) -> dict:
     gh.ensure_clone()
     wt = gh.detached_worktree(f"release-{ctx.number}", merge_sha or "origin/main")
     gh.sh("uv", "sync", "-q", cwd=wt)
-    out_png = wt / "smoke-card.png"
     res = await _agent.run(
         ctx,
         "release",
@@ -58,27 +62,29 @@ async def run(ctx, merge_sha: str) -> dict:
         prompt=(
             f'Merged: PR #{ctx.pr["number"]} "{ctx.pr.get("title") or ctx.issue["title"]}" '
             f"(commit {merge_sha[:7] if merge_sha else 'HEAD'}), closing issue #{ctx.number}.\n\n"
-            f"PR description:\n{(ctx.pr.get('body') or '')[:4000]}\n\n"
-            f"Smoke-test PR URL: {config.SMOKE_PR_URL}\nOutput path for the card: {out_png}"
+            f"PR description:\n{(ctx.pr.get('body') or '')[:4000]}"
         ),
         cwd=wt,
         model=config.BUILD_MODEL,
         sandbox="workspace_write",
-        network=True,  # the smoke test fetches a public PR from GitHub
         schema=SCHEMA,
         max_tokens=config.RELEASE_MAX_TOKENS,
     )
     if not isinstance(res.structured, dict):
         raise TypeError(f"release agent returned no result ({_agent.why(res)})")
     out = dict(res.structured)
-    # Trust, but verify the one check we can see from here.
-    if out["smoke_passed"] and not out_png.exists():
+    # Trust, but verify: the factory runs the smoke test itself before it tags anything.
+    smoke = await asyncio.to_thread(
+        subprocess.run, SMOKE, cwd=wt, capture_output=True, text=True, check=False
+    )
+    if smoke.returncode != 0:
         out["smoke_passed"] = False
+        failed = [line for line in smoke.stdout.splitlines() if line.startswith("FAIL")]
         out["checks"].append(
             {
-                "command": "factory: card PNG exists",
+                "command": "factory: " + " ".join(SMOKE),
                 "passed": False,
-                "note": f"{out_png.name} was not written",
+                "note": "; ".join(failed)[:300] or smoke.stderr.strip()[-300:],
             }
         )
     out["tokens"] = res.tokens

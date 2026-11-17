@@ -23,7 +23,3 @@ Work like this:
 
 Return the structured result: whether you fixed it, a conventional-commit message for
 the fix, and notes on the root cause.
-
-If a reviewer asks for the example cards in `examples/` to be regenerated and
-`OPENAI_API_KEY` is set in your environment, `uv run python -m shipit <pr-url> -o examples/<file>.png`
-makes them with generated art. Regenerate only the cards the change affects.
