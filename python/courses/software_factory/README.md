@@ -39,7 +39,7 @@ and a time limit, so a confused agent can't run up a bill.
 
 ## Requirements
 
-- Python 3.11 or later and [uv](https://docs.astral.sh/uv/)
+- Python 3.12 or later and [uv](https://docs.astral.sh/uv/)
 - The [Codex CLI](https://developers.openai.com/codex/cli), logged in. The factory drives
   Codex through the [Codex SDK](https://developers.openai.com/codex/sdk), which uses
   your Codex login.
