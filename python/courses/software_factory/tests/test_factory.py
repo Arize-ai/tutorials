@@ -122,3 +122,14 @@ def test_next_version():
     assert release.next_version("v0.3.4", "patch") == "v0.3.5"
     assert release.next_version("v0.3.4", "minor") == "v0.4.0"
     assert release.next_version("0.3.4", "major") == "v1.0.0"
+
+
+def test_sandbox_overrides(monkeypatch):
+    monkeypatch.setattr(agent, "uv_cache_dir", lambda: "/home/me/.cache/uv")
+    assert agent.sandbox_overrides("read_only", network=True) == ()
+    assert agent.sandbox_overrides("workspace_write", network=False) == (
+        'sandbox_workspace_write.writable_roots=["/home/me/.cache/uv"]',
+    )
+    assert agent.sandbox_overrides("workspace_write", network=True)[0] == (
+        "sandbox_workspace_write.network_access=true"
+    )

@@ -21,8 +21,10 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import functools
 import json
 import logging
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -80,8 +82,11 @@ async def run_agent(
 ) -> AgentResult:
     """Run one agent turn to completion. on_tool gets a one-line summary of each tool
     call, e.g. "$ uv run pytest" or "edit shipit/stats.py"."""
-    overrides = ("sandbox_workspace_write.network_access=true",) if network else ()
-    codex_config = CodexConfig(cwd=str(cwd), env=tracing.agent_env(trace_attrs), config_overrides=overrides)
+    codex_config = CodexConfig(
+        cwd=str(cwd),
+        env=tracing.agent_env(trace_attrs),
+        config_overrides=sandbox_overrides(sandbox, network=network),
+    )
     result = AgentResult(text="")
     async with AsyncCodex(codex_config) as codex:
         thread = await codex.thread_start(
@@ -144,6 +149,37 @@ async def run_agent(
         except json.JSONDecodeError:
             result.structured = None
     return result
+
+
+# ---------- sandbox ----------
+
+
+@functools.cache
+def uv_cache_dir() -> str | None:
+    """uv's cache directory, which lives outside every worktree."""
+    try:
+        out = subprocess.run(["uv", "cache", "dir"], check=True, capture_output=True, text=True)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return out.stdout.strip() or None
+
+
+def sandbox_overrides(sandbox: str, *, network: bool) -> tuple[str, ...]:
+    """Codex config overrides for a workspace-write sandbox.
+
+    `uv run` writes to uv's cache outside the worktree, which the sandbox blocks
+    ("Failed to initialize cache"), so the cache is added as a writable root. Pointing
+    UV_CACHE_DIR into the worktree instead would get the cache committed with the change.
+    """
+    if sandbox != "workspace_write":
+        return ()
+    overrides = []
+    if network:
+        overrides.append("sandbox_workspace_write.network_access=true")
+    cache = uv_cache_dir()
+    if cache:
+        overrides.append(f"sandbox_workspace_write.writable_roots={json.dumps([cache])}")
+    return tuple(overrides)
 
 
 # ---------- schemas ----------
