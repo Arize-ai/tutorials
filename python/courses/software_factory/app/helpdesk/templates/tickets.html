@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Tickets{% endblock %}
+{% block content %}
+<div class="heading">
+  <h1>Tickets</h1>
+  <a class="button primary" href="/tickets/new">New ticket</a>
+</div>
+
+<nav class="tabs" aria-label="Ticket views">
+  <a href="?{{ query(view='active') }}" {% if view == 'active' %}aria-current="page"{% endif %}>Active <span class="count">{{ active_count }}</span></a>
+  {% for s in Status %}
+  <a href="?{{ query(view=s.value) }}" {% if view == s.value %}aria-current="page"{% endif %}>{{ s.value|capitalize }} <span class="count">{{ counts[s] }}</span></a>
+  {% endfor %}
+  <a href="?{{ query(view='all') }}" {% if view == 'all' %}aria-current="page"{% endif %}>All</a>
+</nav>
+
+<form class="filters" method="get" action="/tickets">
+  <input type="hidden" name="view" value="{{ view }}">
+  <label class="inline"><input type="checkbox" name="mine" value="true" {% if mine %}checked{% endif %} onchange="this.form.submit()"> Assigned to me</label>
+  <label class="inline">Priority
+    <select name="priority" onchange="this.form.submit()">
+      <option value="">Any</option>
+      {% for p in Priority %}<option value="{{ p.value }}" {% if priority == p %}selected{% endif %}>{{ p.value|capitalize }}</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button type="submit">Filter</button></noscript>
+</form>
+
+{% if tickets %}
+<table class="tickets">
+  <thead>
+    <tr><th>#</th><th>Subject</th><th>Status</th><th>Priority</th><th>Assignee</th><th>Requester</th><th>Updated</th></tr>
+  </thead>
+  <tbody>
+    {% for t in tickets %}
+    <tr>
+      <td class="num">{{ t.number }}</td>
+      <td><a href="/tickets/{{ t.number }}">{{ t.subject }}</a></td>
+      <td><span class="badge status-{{ t.status.value }}">{{ t.status.value }}</span></td>
+      <td><span class="prio prio-{{ t.priority.value }}">{{ t.priority.value }}</span></td>
+      <td>{{ t.assignee.name if t.assignee else "—" }}</td>
+      <td class="muted">{{ t.requester_email }}</td>
+      <td class="muted"><time datetime="{{ t.updated_at.isoformat() }}">{{ t.updated_at.strftime('%b %d, %H:%M') }}</time></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">No tickets here.</p>
+{% endif %}
+{% endblock %}

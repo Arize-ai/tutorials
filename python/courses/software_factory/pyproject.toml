@@ -21,6 +21,7 @@ package = false
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+testpaths = ["tests"]  # app/ is the helpdesk template, with its own tests and settings
 
 [tool.ruff]
 line-length = 110

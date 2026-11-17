@@ -1,7 +1,7 @@
 """The course backlog: ten helpdesk issues of known difficulty and risk.
 
     python -m factory.backlog list              # what's in backlog/ and the expected route
-    python -m factory.backlog file              # file every issue on your fork
+    python -m factory.backlog file              # file every issue on your helpdesk repo
     python -m factory.backlog file 01 04        # file only these
 
 Each file in backlog/ has front matter with the issue `title`, the route the course
@@ -66,7 +66,9 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m factory.backlog")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("list", help="show the backlog and the expected routes").set_defaults(func=cmd_list)
-    file_ = sub.add_parser("file", help="file backlog issues on your fork (skips ones already filed)")
+    file_ = sub.add_parser(
+        "file", help="file backlog issues on your helpdesk repo (skips ones already filed)"
+    )
     file_.add_argument("keys", nargs="*", help="issue numbers from the file names, e.g. 01 04")
     file_.set_defaults(func=cmd_file)
     args = parser.parse_args(argv)

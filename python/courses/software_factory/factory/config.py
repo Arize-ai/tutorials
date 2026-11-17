@@ -74,7 +74,9 @@ PROMPTS = ROOT / "factory" / "prompts"
 
 def require_target() -> str:
     if not TARGET_REPO:
-        raise SystemExit("Set FACTORY_TARGET_REPO in .env to your fork, e.g. you/helpdesk")
+        raise SystemExit(
+            "Set FACTORY_TARGET_REPO in .env to your helpdesk repo (create it with `python -m factory.setup you/helpdesk`)"
+        )
     return TARGET_REPO
 
 

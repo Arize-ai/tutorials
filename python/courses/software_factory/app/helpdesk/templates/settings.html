@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1>Settings</h1>
+
+<section id="team" class="card">
+  <h2>Team</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr><td>{{ u.name }}</td><td class="muted">{{ u.email }}</td><td>{{ u.role.value }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section id="api-keys" class="card">
+  <h2>API keys</h2>
+  {% if keys %}
+  <table>
+    <thead><tr><th>Name</th><th>Key</th><th>Scopes</th><th>Last used</th><th></th></tr></thead>
+    <tbody>
+      {% for k in keys %}
+      <tr class="{% if k.revoked_at %}revoked{% endif %}">
+        <td>{{ k.name }}</td>
+        <td><code>hd_{{ k.prefix }}…</code></td>
+        <td>{% for s in k.scope_list %}<span class="badge">{{ s }}</span> {% endfor %}</td>
+        <td class="muted">{{ k.last_used_at.strftime('%b %d, %H:%M') if k.last_used_at else "never" }}</td>
+        <td>
+          {% if k.revoked_at %}<span class="muted">revoked</span>{% else %}
+          <form method="post" action="/settings/api-keys/{{ k.id }}/revoke">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="danger small">Revoke</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="empty">No API keys yet.</p>{% endif %}
+  <form method="post" action="/settings/api-keys" class="row wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Name <input name="name" required maxlength="80" placeholder="CRM sync"></label>
+    <fieldset class="inline-set"><legend>Scopes</legend>
+      {% for s in scopes %}<label class="inline"><input type="checkbox" name="scopes" value="{{ s.value }}"> {{ s.value }}</label>{% endfor %}
+    </fieldset>
+    <button type="submit" class="primary">Create key</button>
+  </form>
+</section>
+
+<section id="webhooks" class="card">
+  <h2>Webhooks</h2>
+  {% if hooks %}
+  <table>
+    <thead><tr><th>URL</th><th>Events</th><th></th></tr></thead>
+    <tbody>
+      {% for h in hooks %}
+      <tr>
+        <td><code>{{ h.url }}</code></td>
+        <td>{% for e in h.event_list %}<span class="badge">{{ e }}</span> {% endfor %}</td>
+        <td>
+          <form method="post" action="/settings/webhooks/{{ h.id }}/delete">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="danger small">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<p class="empty">No webhooks yet.</p>{% endif %}
+  <form method="post" action="/settings/webhooks" class="row wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="grow">URL <input name="url" type="url" required placeholder="https://example.com/hooks/helpdesk"></label>
+    <fieldset class="inline-set"><legend>Events</legend>
+      {% for e in events %}<label class="inline"><input type="checkbox" name="events" value="{{ e.value }}" checked> {{ e.value }}</label>{% endfor %}
+    </fieldset>
+    <button type="submit" class="primary">Add webhook</button>
+  </form>
+
+  {% if deliveries %}
+  <h3>Recent deliveries</h3>
+  <table>
+    <thead><tr><th>Event</th><th>Webhook</th><th>Result</th><th>Sent</th></tr></thead>
+    <tbody>
+      {% for d in deliveries %}
+      <tr>
+        <td>{{ d.event }}</td>
+        <td class="muted"><code>{{ d.webhook.url }}</code></td>
+        <td>
+          {% if d.attempted_at is none %}<span class="badge">queued</span>
+          {% elif d.delivered %}<span class="badge status-solved">{{ d.status_code }}</span>
+          {% else %}<span class="badge status-open" title="{{ d.error }}">failed</span>{% endif %}
+        </td>
+        <td class="muted">{{ d.attempted_at.strftime('%b %d, %H:%M:%S') if d.attempted_at else "—" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endblock %}

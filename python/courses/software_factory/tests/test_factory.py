@@ -1,5 +1,6 @@
 """Unit tests for the factory pieces that don't need Codex, GitHub or Arize AX."""
 
+import shutil
 from pathlib import Path
 
 from openai_codex.generated.v2_all import (
@@ -8,8 +9,24 @@ from openai_codex.generated.v2_all import (
     FileChangeThreadItem,
 )
 
-from factory import agent, backlog, tracing
+from factory import agent, backlog, config, setup, tracing
 from factory.stations import release, review, router, spec
+
+
+def test_template_copies_the_app_without_local_state(tmp_path):
+    (setup.TEMPLATE / "helpdesk.db").touch()
+    try:
+        shutil.copytree(setup.TEMPLATE, tmp_path / "repo", ignore=setup.IGNORE)
+    finally:
+        (setup.TEMPLATE / "helpdesk.db").unlink()
+    repo = tmp_path / "repo"
+    for needed in (".github/workflows/ci.yml", "AGENTS.md", "pyproject.toml", "uv.lock", "helpdesk/app.py"):
+        assert (repo / needed).exists(), needed
+    assert not (repo / "helpdesk.db").exists()
+    assert not (repo / ".venv").exists()
+    # The router's sensitive paths must name files that exist in the app.
+    for path in config.DEFAULT_SENSITIVE_PATHS:
+        assert (repo / path).exists(), path
 
 
 def test_strict_schema_requires_everything_and_makes_optional_nullable():

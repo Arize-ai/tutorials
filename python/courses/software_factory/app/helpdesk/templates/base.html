@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Helpdesk{% endblock %} · Helpdesk</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/tickets"><span class="logo" aria-hidden="true">◆</span> Helpdesk</a>
+    {% if user %}
+    <nav class="nav">
+      <a href="/tickets" {% if request.url.path.startswith('/tickets') and request.url.path != '/tickets/new' %}aria-current="page"{% endif %}>Tickets</a>
+      <a href="/tickets/new" {% if request.url.path == '/tickets/new' %}aria-current="page"{% endif %}>New ticket</a>
+      {% if user.role.value == 'admin' %}
+      <a href="/settings" {% if request.url.path == '/settings' %}aria-current="page"{% endif %}>Settings</a>
+      {% endif %}
+    </nav>
+    <div class="who">
+      <span><strong>{{ user.name }}</strong> · {{ user.tenant.name }}</span>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="link" type="submit">Sign out</button>
+      </form>
+    </div>
+    {% endif %}
+  </header>
+  <main class="{% block main_class %}page{% endblock %}">
+    {% for f in flashes %}
+    <div class="flash flash-{{ f.kind }}" role="{{ 'alert' if f.kind == 'error' else 'status' }}">
+      {{ f.text }}
+      {% if f.code %}<code class="secret">{{ f.code }}</code>{% endif %}
+    </div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

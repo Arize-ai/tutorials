@@ -5,10 +5,10 @@ its own prompts.
 
 A software factory is a pipeline where a GitHub issue goes in and a released change
 comes out, with a Codex agent doing the work at each station. This one works on
-[helpdesk](https://github.com/jimbobbennett/helpdesk), a multi-tenant support desk with a
-ticket API, signed webhooks and a web UI, built with FastAPI and SQLite. You fork it,
-file issues on your fork, and the factory takes each one from spec to release, with you
-as the review gate.
+helpdesk, a multi-tenant support desk with a ticket API, signed webhooks and a web UI,
+built with FastAPI and SQLite. The app's source is in [`app/`](app/). You create your own
+helpdesk repo from it, file issues there, and the factory takes each one from spec to
+release, with you as the review gate.
 
 A helpdesk makes the factory's decisions matter. Many customer workspaces share one
 database, so a query that forgets its workspace filter leaks one customer's tickets to
@@ -46,22 +46,24 @@ and a time limit, so a confused agent can't run up a bill.
 - Codex tracing from [Arize Coding Harness Tracing](https://github.com/Arize-ai/coding-harness-tracing),
   installed for your Arize AX space:
   `curl -sSL https://raw.githubusercontent.com/Arize-ai/coding-harness-tracing/main/install.sh | bash -s -- codex`
-- The [GitHub CLI](https://cli.github.com/) (`gh`), logged in to the account that owns
-  your fork
+- The [GitHub CLI](https://cli.github.com/) (`gh`), logged in to your GitHub account
 - An [Arize AX](https://app.arize.com/auth/join) account, and the [`ax` CLI](https://arize.com/docs/ax/skills/install)
   logged in with a profile for your space (for Prompt Hub)
-- Your fork of [helpdesk](https://github.com/jimbobbennett/helpdesk), with GitHub Actions
-  enabled
 
 ## Setup
 
 ```bash
 uv sync
 cp .env.example .env
+uv run python -m factory.setup <your-github-user>/helpdesk
 ```
 
-Fill in `.env`: `FACTORY_TARGET_REPO` (your fork), and your Arize AX space ID and API
-key. Use the same space you installed Codex tracing into.
+`factory.setup` copies the helpdesk app in `app/` into a new private repo on your GitHub
+account (add `--public` for a public one) and pushes it. Its GitHub Actions workflow runs
+the app's CI on every pull request the factory opens.
+
+Fill in `.env`: `FACTORY_TARGET_REPO` (the repo you just created), and your Arize AX
+space ID and API key. Use the same space you installed Codex tracing into.
 
 Then seed Prompt Hub with the station prompts from `factory/prompts/`:
 
@@ -78,7 +80,7 @@ runs with each other and, later, with each prompt version.
 
 ```bash
 uv run python -m factory.backlog list         # the issues and their expected routes
-uv run python -m factory.backlog file         # file them all on your fork
+uv run python -m factory.backlog file         # file them all on your helpdesk repo
 uv run python -m factory.backlog file 01 02   # or just some
 ```
 
@@ -87,7 +89,7 @@ agents' sight.
 
 ## Running the factory
 
-File an issue on your fork (or use the backlog), then:
+File an issue on your helpdesk repo (or use the backlog), then:
 
 ```bash
 uv run python -m factory.run 3            # run the factory on issue #3
@@ -162,7 +164,7 @@ Everything is read from `.env`:
 
 | Variable | Default | What it does |
 |---|---|---|
-| `FACTORY_TARGET_REPO` | (required) | Your fork, e.g. `you/helpdesk` |
+| `FACTORY_TARGET_REPO` | (required) | Your helpdesk repo, e.g. `you/helpdesk` |
 | `ARIZE_SPACE_ID`, `ARIZE_API_KEY` | unset | Arize AX credentials; without them the factory runs untraced |
 | `FACTORY_ARIZE_PROJECT` | `software-factory` | Project for the factory trace and every agent trace |
 | `FACTORY_PROMPT_PREFIX` | `software-factory` | Prompt Hub names are `<prefix>-<station>` |
@@ -187,10 +189,12 @@ factory/
   tracing.py      the factory trace, and the attributes that tie agent traces to it
   context.py      per-issue run state, saved to runs/state/
   prompts.py      Prompt Hub loader and CLI
-  backlog.py      files the course backlog on your fork
+  setup.py        creates your helpdesk repo from app/
+  backlog.py      files the course backlog on your helpdesk repo
   gh.py           git and gh plumbing (the only code that writes to GitHub)
   stations/       spec, build, ci, babysit, review, router, human, release
   prompts/        station system prompts (the Prompt Hub seed)
+app/              the helpdesk app: the template for the repo the factory works on
 backlog/          ten helpdesk issues with their expected routes
 tests/            unit tests: uv run pytest
 ```
