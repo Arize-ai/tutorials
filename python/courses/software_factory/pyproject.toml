@@ -1,0 +1,26 @@
+[project]
+name = "software-factory"
+version = "0.1.0"
+description = "A software factory of Codex agents traced to Arize AX: the companion code for the Arize AX software factory course"
+requires-python = ">=3.11"
+dependencies = [
+    "arize-otel>=0.13",
+    "openai-codex>=0.169.0",
+    "openinference-instrumentation>=0.1.60",
+    "python-dotenv>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
