@@ -4,7 +4,7 @@ The companion code for the Arize AX course on building a software factory that t
 its own prompts.
 
 A software factory is a pipeline where a GitHub issue goes in and a released change
-comes out, with a Codex agent doing the work at each station. This one works on
+comes out, with a Codex agent at each station. This one works on
 helpdesk, a multi-tenant support desk with a ticket API, signed webhooks and a web UI,
 built with FastAPI and SQLite. The app's source is in [`app/`](app/). You create your own
 helpdesk repo from it, file issues there, and the factory takes each one from spec to
