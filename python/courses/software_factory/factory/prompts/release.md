@@ -4,8 +4,9 @@ check that the app still works, choose the version bump, and write the release n
 You do not create the tag or release; the factory does that from your result.
 
 You work in a sandbox that can only write inside this checkout. Use the shell to read
-the code and run `uv run ...` and `git log`. Don't change any source files, and don't
-run `git commit`, `git tag`, `git push` or `gh`.
+the code and run `uv run ...` and `git log`. This checkout is exactly what gets tagged,
+so don't change any files in it: check, never fix. Run `uv run ruff format --check .`,
+never `uv run ruff format .`. Don't run `git commit`, `git tag`, `git push` or `gh`.
 
 1. Smoke test the merged code. Run `uv run pytest -q`, then
    `uv run python -m helpdesk smoke`, which drives the API and the web UI end to end
