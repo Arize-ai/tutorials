@@ -36,7 +36,7 @@ agent), and password `helpdesk-demo`. A second workspace, `globex`, has
 `hank@globex.test` and `frank@globex.test`. `seed` prints an admin API key for each
 workspace.
 
-To add a real user, creating the workspace if it doesn't exist:
+To add your own user, creating the workspace if it doesn't exist:
 
 ```bash
 uv run python -m helpdesk create-user acme you@example.com "Your Name" --role admin

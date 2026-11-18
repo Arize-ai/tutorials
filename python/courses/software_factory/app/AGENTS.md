@@ -23,7 +23,7 @@ app. Releases are gated on it, so keep it passing when you change a flow it chec
   on its own. Anything outside the caller's workspace returns 404, not 403, so its
   existence isn't leaked. Add a test in `tests/test_tenancy.py` for any new endpoint
   or query.
-- **Business logic lives in `helpdesk/services.py`.** The API (`api.py`) and the web UI
+- **Business logic goes in `helpdesk/services.py`.** The API (`api.py`) and the web UI
   (`web.py`) are thin layers over it, so a feature usually needs a service function, an
   API route, a UI change and tests for each.
 - **API routes declare their scope** with `CanRead`, `CanWrite` or `IsAdmin` from

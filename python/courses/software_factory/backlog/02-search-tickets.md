@@ -1,7 +1,7 @@
 ---
 title: Search tickets by keyword
 expect: automerge
-why: A medium-risk feature across the service, API and UI. The trap is a new query that forgets the workspace filter; the tenancy tests and the security reviewer should catch it.
+why: A medium-risk feature across the service, API and UI. A new query can easily drop the workspace filter; the tenancy tests and the security reviewer should catch it.
 ---
 Our agents can only find a ticket by scrolling the queue. Please add search.
 

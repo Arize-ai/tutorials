@@ -125,7 +125,7 @@ Two kinds of trace land in your `software-factory` project:
 
 - **One factory trace per issue**, sent by the factory: a `factory.run` root span with a
   span per station (`station.spec`, `station.build`, `station.ci`, ...). Every span has
-  `session.id` set to `<repo>#<issue>`, and station spans carry `factory.station`,
+  `session.id` set to `<repo>#<issue>`, and station spans have `factory.station`,
   `factory.issue`, `factory.pr` and `factory.attempt`.
 - **One agent trace per Codex turn**, sent by Codex tracing when the turn completes: an
   LLM span with the prompt, the answer, the model and token counts, and a TOOL span for
@@ -133,7 +133,7 @@ Two kinds of trace land in your `software-factory` project:
 
 The factory ties the two together. Each station span records the agent's
 `factory.codex_thread_id`, and the factory passes `OTEL_RESOURCE_ATTRIBUTES` to each
-agent's Codex runtime, so every agent span carries `factory.issue`, `factory.station`,
+agent's Codex runtime, so every agent span has `factory.issue`, `factory.station`,
 `factory.attempt`, `factory.run_trace_id` and the Prompt Hub version that ran
 (`factory.prompt_name`, `factory.prompt_version_id`). To see every agent that worked on
 issue 3, filter spans on `factory.issue = '3'`.
@@ -143,7 +143,7 @@ The factory sets the project for both with `FACTORY_ARIZE_PROJECT`, not
 own tracing) exports `ARIZE_PROJECT_NAME`, and a factory started from inside it would
 otherwise send everything to that session's project.
 
-## Prompts live in Arize AX Prompt Hub
+## Prompts are in Arize AX Prompt Hub
 
 Each agent station has one Prompt Hub prompt, `software-factory-<station>`, and runs the
 version labeled `production`. Promoting a new version in Arize AX changes the factory's
