@@ -197,4 +197,5 @@ factory/
 app/              the helpdesk app: the template for the repo the factory works on
 backlog/          ten helpdesk issues with their expected routes
 tests/            unit tests: uv run pytest
+MAINTAINERS.md    decisions, measured numbers, status, and research, for course maintainers
 ```
