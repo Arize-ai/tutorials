@@ -27,10 +27,10 @@ WORKDIR = (ROOT / os.getenv("FACTORY_WORKDIR", "work")).resolve()
 CLONE_DIR = WORKDIR / (TARGET_REPO.split("/")[-1] or "target")
 WORKTREES = WORKDIR / "worktrees"
 
-# Codex models: a fast, cheap model builds, and a stronger one reviews, so code is never
-# reviewed by the model that wrote it.
-BUILD_MODEL = os.getenv("FACTORY_BUILD_MODEL", "gpt-6-luna")
-REVIEW_MODEL = os.getenv("FACTORY_REVIEW_MODEL", "gpt-6.2-sol")
+# Codex models: the workhorse model builds, and the frontier model reviews, so code is
+# never reviewed by the model that wrote it.
+BUILD_MODEL = os.getenv("FACTORY_BUILD_MODEL", "gpt-6.2-sol")
+REVIEW_MODEL = os.getenv("FACTORY_REVIEW_MODEL", "gpt-6.2-astra")
 
 # Hard stops per station so a confused agent can't run up a bill. Budgets count the
 # tokens a turn actually pays full price for: uncached input plus output.
