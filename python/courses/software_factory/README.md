@@ -143,7 +143,7 @@ The factory sets the project for both with `FACTORY_ARIZE_PROJECT`, not
 own tracing) exports `ARIZE_PROJECT_NAME`, and a factory started from inside it would
 otherwise send everything to that session's project.
 
-## Prompts live in Arize Prompt Hub
+## Prompts live in Arize AX Prompt Hub
 
 Each agent station has one Prompt Hub prompt, `software-factory-<station>`, and runs the
 version labeled `production`. Promoting a new version in Arize AX changes the factory's
