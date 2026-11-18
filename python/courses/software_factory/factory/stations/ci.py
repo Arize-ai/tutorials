@@ -19,15 +19,17 @@ class Conflicting(Exception):
 async def wait(sha: str, timeout_s: int | None = None, pr: int | None = None) -> tuple[bool, str]:
     """Return (passed, summary) once every check run on sha has completed.
 
-    Raises Conflicting if no checks have started after a minute and the PR conflicts
-    with main (main moved on while this PR waited)."""
+    Raises Conflicting if no checks have started and the PR conflicts with main (main
+    moved on while this PR waited). GitHub computes mergeability lazily and can report
+    UNKNOWN for a while, so the check repeats every minute until CI starts."""
     start = time.monotonic()
     deadline = start + (timeout_s or config.CI_TIMEOUT_S)
-    seen_any = checked = False
+    seen_any = False
+    next_check = start + 60
     while time.monotonic() < deadline:
         runs = await asyncio.to_thread(gh.check_runs, sha)
-        if not runs and pr and not checked and time.monotonic() - start > 60:
-            checked = True
+        if not runs and pr and time.monotonic() >= next_check:
+            next_check = time.monotonic() + 60
             if await asyncio.to_thread(gh.mergeable, pr) == "CONFLICTING":
                 raise Conflicting(f"PR #{pr} conflicts with main")
         if runs:

@@ -5,6 +5,7 @@
     python -m factory.run 1 --from ci        # adopt an existing factory PR (skip spec+build)
     python -m factory.run --watch            # resume runs parked at the review gate
     python -m factory.run --release 7        # re-run only the release step
+    python -m factory.run --retry 7          # resume a failed run from where it stopped
 
 Stations: spec → build → CI (⟲ babysit) → 3 reviewers → router → auto-merge | review gate → release.
 One issue = one factory trace in Arize AX, plus one Codex trace per agent turn.
@@ -457,6 +458,48 @@ async def rerelease(number: int) -> None:
             ctx.save()
 
 
+async def retry(number: int) -> None:
+    """Resume a failed run from the step it was on, in the same trace. For runs that died
+    partway, for example when the agents ran out of credits."""
+    ctx = Ctx.load(number)
+    if ctx.status != "failed":
+        raise SystemExit(f"issue #{number} is {ctx.status}, not failed: nothing to retry")
+    if not ctx.pr:
+        raise SystemExit(f"issue #{number} failed before it had a PR: run it again from the start")
+    ctx.status = "running"
+    with tracing.span(
+        "factory.resume",
+        session_id=ctx.session_id,
+        metadata=ctx.base("retry"),
+        input=f"retry after: {ctx.outcome}",
+        parent=(ctx.trace_id, ctx.root_span_id),
+    ) as root:
+        try:
+            verdict = None
+            if ctx.gate_opened_at:
+                verdict, _ = await asyncio.to_thread(human.verdict, ctx.pr["number"], ctx.gate_opened_at)
+            if verdict == "ship":
+                # You already said /ship: merge (resolving any conflict with main) and release.
+                sha = await do_merge(ctx, station="human")
+                if not sha:
+                    return finish(ctx, "approved but merge failed", status="failed")
+                ctx.status = "merged"
+                await do_release(ctx, sha)
+            elif ctx.reworks:
+                # A /changes rework was pushed: finish CI and hand the PR back to you.
+                if not await ci_loop(ctx):
+                    return finish(ctx, "CI red after rework", status="failed")
+                await open_human_gate(ctx, [f"rework {ctx.reworks} after your /changes"])
+            else:
+                await after_build(ctx)
+        except Exception as e:
+            finish(ctx, f"failed: {str(e)[:160]}", status="failed")
+            raise
+        finally:
+            stamp(root, ctx)
+            ctx.save()
+
+
 async def watch(poll_s: int, once: bool) -> None:
     log.info("watching runs parked at the review gate (Ctrl-C to stop)")
     while True:
@@ -484,13 +527,17 @@ async def main(argv: list[str]) -> int:
     p.add_argument("--watch", action="store_true", help="resume runs parked at the review gate")
     p.add_argument("--once", action="store_true", help="with --watch: check once and exit")
     p.add_argument("--release", type=int, metavar="ISSUE", help="re-run only the release step")
+    p.add_argument("--retry", type=int, metavar="ISSUE", help="resume a failed run from where it stopped")
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     config.require_target()
-    if args.release:
+    if args.release or args.retry:
         tracing.init()
         try:
-            await rerelease(args.release)
+            if args.release:
+                await rerelease(args.release)
+            else:
+                await retry(args.retry)
         finally:
             tracing.shutdown()
         return 0

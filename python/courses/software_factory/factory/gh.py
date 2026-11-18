@@ -89,6 +89,10 @@ def worktree_for(branch: str) -> Path:
     clone = ensure_clone()
     path = config.WORKTREES / branch.replace("/", "-")
     if (path / ".git").exists():
+        # A run that died partway (out of credits, a crash) can leave a merge half done.
+        # The worktree is reset to the remote branch below, so drop any local state first.
+        sh("git", "merge", "--abort", cwd=path, check=False)
+        sh("git", "reset", "-q", "--hard", cwd=path)
         sh("git", "fetch", "-q", "origin", branch, cwd=path)
         sh("git", "checkout", "-q", branch, cwd=path)
         sh("git", "reset", "-q", "--hard", f"origin/{branch}", cwd=path)
