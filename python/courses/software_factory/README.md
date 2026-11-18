@@ -168,8 +168,8 @@ Everything is read from `.env`:
 | `ARIZE_SPACE_ID`, `ARIZE_API_KEY` | unset | Arize AX credentials; without them the factory runs untraced |
 | `FACTORY_ARIZE_PROJECT` | `software-factory` | Project for the factory trace and every agent trace |
 | `FACTORY_PROMPT_PREFIX` | `software-factory` | Prompt Hub names are `<prefix>-<station>` |
-| `FACTORY_BUILD_MODEL` | `gpt-6.1-sol` | Codex model for spec, build, babysit, router and release |
-| `FACTORY_REVIEW_MODEL` | `gpt-6-astra` | Codex model for the three reviewers |
+| `FACTORY_BUILD_MODEL` | `gpt-6-luna` | Codex model for spec, build, babysit, router and release |
+| `FACTORY_REVIEW_MODEL` | `gpt-6.2-sol` | Codex model for the three reviewers |
 | `FACTORY_<STATION>_MAX_TOKENS` | per station | Token budget (uncached input + output) before a turn is interrupted |
 | `FACTORY_AGENT_TIMEOUT_S` | `1800` | Wall-clock limit for any one agent turn |
 | `FACTORY_MAX_CI_FIXES` | `3` | Babysit attempts before a red PR is labeled `factory-stuck` |
