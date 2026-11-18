@@ -106,10 +106,12 @@ def ticket_list(
     db: DB,
     view: str = "active",
     mine: bool = False,
-    priority: Priority | None = None,
+    priority: str = "",
 ) -> HTMLResponse:
     if view not in VIEWS:
         view = "active"
+    # The filter form sends priority= for "Any", so an empty or unknown value means no filter.
+    priority = Priority(priority) if priority in set(Priority) else None
     tickets = services.list_tickets(
         db,
         user.tenant_id,

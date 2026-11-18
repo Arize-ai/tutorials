@@ -117,6 +117,20 @@ def test_ticket_views(client, acme):
     assert "No tickets here" in client.get("/tickets?mine=true").text
 
 
+def test_filter_form_with_any_priority(client, acme):
+    """A browser sends priority= when the filter is left on Any."""
+    urgent = new_ticket(client, acme, subject="Pager is on fire", priority="urgent")
+    calm = new_ticket(client, acme, subject="Typo on invoice", priority="low")
+    login(client, acme)
+    page = client.get("/tickets?view=active&priority=")
+    assert page.status_code == 200
+    assert urgent["subject"] in page.text and calm["subject"] in page.text
+    assert client.get("/tickets?view=active&mine=true&priority=").status_code == 200
+    filtered = client.get("/tickets?view=active&priority=urgent").text
+    assert urgent["subject"] in filtered and calm["subject"] not in filtered
+    assert client.get("/tickets?priority=whenever").status_code == 200
+
+
 def test_ui_is_isolated_per_workspace(client, acme, globex):
     new_ticket(client, globex, subject="Globex only")
     login(client, acme)
