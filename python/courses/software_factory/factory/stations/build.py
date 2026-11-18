@@ -21,6 +21,16 @@ SCHEMA = {
 TRAILER = "Co-Authored-By: Codex <noreply@openai.com>"
 
 
+class Blocked(Exception):
+    """The builder declined to change anything, usually because the spec left a
+    decision for a human. Carries the builder's reasons."""
+
+    def __init__(self, reasons: str, tokens: int = 0):
+        super().__init__(reasons)
+        self.reasons = reasons
+        self.tokens = tokens
+
+
 async def run(ctx) -> dict:
     issue, spec = ctx.issue, ctx.spec
     branch = f"factory/issue-{issue['number']}"
@@ -48,7 +58,8 @@ async def run(ctx) -> dict:
 
     stat = gh.diff_stat(wt)
     if not stat:
-        raise RuntimeError("builder made no changes")
+        reasons = (out.get("notes") or "").strip() or (out.get("pr_body") or "").strip()
+        raise Blocked(reasons or "The builder made no changes and gave no reason.", res.tokens)
 
     subject_body = "\n".join(
         line

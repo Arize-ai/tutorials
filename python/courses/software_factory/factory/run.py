@@ -49,21 +49,32 @@ async def do_build(ctx: Ctx) -> None:
         input=ctx.spec["markdown"],
         spec_risk=ctx.spec["risk"],
     ) as s:
-        pr = await build.run(ctx)
-        ctx.pr = {
-            "number": pr["number"],
-            "url": pr["url"],
-            "branch": pr["branch"],
-            "head_sha": pr["head_sha"],
-            "title": pr["pr_title"],
-            "body": pr["pr_body"],
-        }
-        ctx.worktree = str(gh.worktree_for(pr["branch"]))
-        tracing.set_output(
-            s, {k: pr[k] for k in ("url", "pr_title", "diff_stat", "local_ci_passed", "notes") if k in pr}
-        )
-        s.set_attribute("factory.pr", pr["number"])
-        s.set_attribute("factory.head_sha", pr["head_sha"])
+        try:
+            pr = await build.run(ctx)
+        except build.Blocked as e:
+            # A handoff, not an error: record it on the span, then raise it once the span
+            # has closed so the station doesn't log it as a failure.
+            s.set_attribute("factory.blocked", True)
+            tracing.set_output(s, {"blocked": e.reasons})
+            blocked = e
+        else:
+            blocked = None
+            ctx.pr = {
+                "number": pr["number"],
+                "url": pr["url"],
+                "branch": pr["branch"],
+                "head_sha": pr["head_sha"],
+                "title": pr["pr_title"],
+                "body": pr["pr_body"],
+            }
+            ctx.worktree = str(gh.worktree_for(pr["branch"]))
+            tracing.set_output(
+                s, {k: pr[k] for k in ("url", "pr_title", "diff_stat", "local_ci_passed", "notes") if k in pr}
+            )
+            s.set_attribute("factory.pr", pr["number"])
+            s.set_attribute("factory.head_sha", pr["head_sha"])
+    if blocked:
+        raise blocked
     ctx.emit("build", "ok", f"PR #{pr['number']} opened")
 
 
@@ -259,6 +270,26 @@ async def open_human_gate(ctx: Ctx, reasons: list[str]) -> None:
     ctx.save()
 
 
+BLOCKED_COMMENT = """### 🏭 The factory stopped before building this
+
+The builder made no changes. Its reasons:
+
+{reasons}
+
+A human needs to decide before this can be built. Update the issue with the decision,
+remove the `needs-human` label, and run the factory on it again.
+"""
+
+
+def block_on_human(ctx: Ctx, e: build.Blocked) -> None:
+    """The builder declined: hand the issue to a human instead of failing the run."""
+    ctx.tokens += e.tokens
+    gh.comment_issue(ctx.number, BLOCKED_COMMENT.format(reasons=e.reasons))
+    gh.label_issue(ctx.number, add=["needs-human"])
+    ctx.emit("build", "wait", f"blocked, needs a human: {e.reasons[:140]}", reasons=e.reasons)
+    finish(ctx, "blocked: the builder left a decision for a human", status="blocked")
+
+
 def finish(ctx: Ctx, outcome: str, status: str | None = None) -> None:
     ctx.outcome = outcome
     if status:
@@ -312,6 +343,8 @@ async def run_issue(number: int, attempt: int = 1, start: str = "spec") -> Ctx:
             else:
                 adopt(ctx)
             await after_build(ctx)
+        except build.Blocked as e:
+            block_on_human(ctx, e)
         except Exception as e:
             finish(ctx, f"failed: {str(e)[:160]}", status="failed")
             raise

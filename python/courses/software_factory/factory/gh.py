@@ -72,6 +72,7 @@ def open_pr(branch: str, title: str, body: str, labels: list[str]) -> dict:
     if existing:
         gh("pr", "edit", str(existing[0]["number"]), "--title", title, "--body-file", "-", input=body)
         return existing[0]
+    ensure_labels(labels)
     args = ["pr", "create", "--head", branch, "--base", "main", "--title", title, "--body-file", "-"]
     for label in labels:
         args += ["--label", label]
@@ -243,9 +244,23 @@ def review_comment(number: int, body: str) -> None:
         comment_pr(number, body)
 
 
-def label_pr(number: int, add: list[str] = (), remove: list[str] = ()) -> None:
-    for name in add:
+def ensure_labels(names) -> None:
+    """Create any labels the repo doesn't have yet. A new repo has none of the factory's."""
+    for name in names:
         sh("gh", "label", "create", name, "-R", config.TARGET_REPO, "--force", check=False)
+
+
+def label_issue(number: int, add: list[str] = ()) -> None:
+    ensure_labels(add)
+    args = ["issue", "edit", str(number)]
+    for name in add:
+        args += ["--add-label", name]
+    if len(args) > 3:
+        gh(*args)
+
+
+def label_pr(number: int, add: list[str] = (), remove: list[str] = ()) -> None:
+    ensure_labels(add)
     args = ["pr", "edit", str(number)]
     for name in add:
         args += ["--add-label", name]

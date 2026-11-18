@@ -1,5 +1,6 @@
 """Unit tests for the factory pieces that don't need Codex, GitHub or Arize AX."""
 
+import json
 import shutil
 from pathlib import Path
 
@@ -9,8 +10,9 @@ from openai_codex.generated.v2_all import (
     FileChangeThreadItem,
 )
 
-from factory import agent, backlog, config, setup, tracing
-from factory.stations import release, review, router, spec
+from factory import agent, backlog, config, events, gh, run, setup, tracing
+from factory.context import Ctx
+from factory.stations import build, release, review, router, spec
 
 
 def test_template_copies_the_app_without_local_state(tmp_path):
@@ -165,3 +167,23 @@ def test_sandbox_overrides(monkeypatch):
     assert agent.sandbox_overrides("workspace_write", network=True)[0] == (
         "sandbox_workspace_write.network_access=true"
     )
+
+
+def test_blocked_builder_hands_the_issue_to_a_human(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setattr(gh, "comment_issue", lambda n, body: calls.append(("comment", n, body)))
+    monkeypatch.setattr(gh, "label_issue", lambda n, add: calls.append(("label", n, add)))
+    monkeypatch.setattr(config, "STATE_DIR", tmp_path / "state")
+    monkeypatch.setattr(events, "EVENTS_PATH", tmp_path / "events.jsonl")
+
+    ctx = Ctx(issue={"number": 2, "title": "Cross-workspace lookup"})
+    run.block_on_human(ctx, build.Blocked("Who may read other workspaces?", tokens=1234))
+
+    assert ctx.status == "blocked"
+    assert ctx.tokens == 1234
+    assert calls[0][:2] == ("comment", 2)
+    assert "Who may read other workspaces?" in calls[0][2]
+    assert calls[1] == ("label", 2, ["needs-human"])
+    assert Ctx.load(2).status == "blocked"
+    logged = [json.loads(line) for line in (tmp_path / "events.jsonl").read_text().splitlines()]
+    assert [(e["station"], e["status"]) for e in logged] == [("build", "wait"), ("done", "info")]

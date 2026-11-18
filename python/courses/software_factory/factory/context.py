@@ -42,7 +42,7 @@ class Ctx:
     tests_delta: int = 0
     reviews: dict = field(default_factory=dict)  # kind -> review result
     route: dict | None = None
-    status: str = "running"  # running | awaiting_human | merged | released | failed | stopped
+    status: str = "running"  # running | awaiting_human | blocked | merged | released | failed | stopped
     gate_opened_at: str = ""
     outcome: str = ""
     started: float = field(default_factory=time.time)
