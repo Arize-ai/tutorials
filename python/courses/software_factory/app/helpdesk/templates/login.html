@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block main_class %}narrow{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Sign in</h1>
+  <form method="post" action="/login" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>Workspace
+      <input name="workspace" value="{{ workspace }}" required autocomplete="organization" placeholder="acme">
+    </label>
+    <label>Email
+      <input name="email" type="email" value="{{ email }}" required autocomplete="username">
+    </label>
+    <label>Password
+      <input name="password" type="password" required autocomplete="current-password">
+    </label>
+    <button type="submit" class="primary">Sign in</button>
+  </form>
+</section>
+{% endblock %}

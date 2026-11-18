@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}New ticket{% endblock %}
+{% block content %}
+<h1>New ticket</h1>
+<form method="post" action="/tickets" class="card stack">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <label>Subject
+    <input name="subject" value="{{ form.subject or '' }}" required maxlength="200">
+  </label>
+  <label>Requester email
+    <input name="requester_email" type="email" value="{{ form.requester_email or '' }}" required>
+  </label>
+  <label>Description
+    <textarea name="description" rows="8">{{ form.description or '' }}</textarea>
+  </label>
+  <div class="row">
+    <label>Priority
+      <select name="priority">
+        {% for p in Priority %}<option value="{{ p.value }}" {% if (form.priority or Priority.normal) == p %}selected{% endif %}>{{ p.value|capitalize }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Assignee
+      <select name="assignee_id">
+        <option value="">Unassigned</option>
+        {% for a in agents %}<option value="{{ a.id }}" {% if form.assignee_id == a.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+  <div><button type="submit" class="primary">Create ticket</button></div>
+</form>
+{% endblock %}

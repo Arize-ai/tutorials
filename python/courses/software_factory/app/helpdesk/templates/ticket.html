@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}#{{ ticket.number }} {{ ticket.subject }}{% endblock %}
+{% block content %}
+<p class="crumbs"><a href="/tickets">Tickets</a> / #{{ ticket.number }}</p>
+<div class="ticket-layout">
+  <article>
+    <h1>{{ ticket.subject }}</h1>
+    <p class="muted">
+      From {{ ticket.requester_email }} · opened <time datetime="{{ ticket.created_at.isoformat() }}">{{ ticket.created_at.strftime('%b %d, %Y %H:%M') }}</time> UTC
+    </p>
+    <div class="card description">{{ ticket.description or "No description." }}</div>
+
+    <h2 id="comments">Conversation <span class="count">{{ ticket.comments|length }}</span></h2>
+    {% for c in ticket.comments %}
+    <div class="comment {% if c.internal %}internal{% endif %}">
+      <div class="comment-meta">
+        <strong>{{ c.author_name }}</strong>
+        {% if c.internal %}<span class="badge internal-badge">Internal note</span>{% endif %}
+        <time class="muted" datetime="{{ c.created_at.isoformat() }}">{{ c.created_at.strftime('%b %d, %H:%M') }}</time>
+      </div>
+      <div class="comment-body">{{ c.body }}</div>
+    </div>
+    {% else %}
+    <p class="empty">No replies yet.</p>
+    {% endfor %}
+
+    <form method="post" action="/tickets/{{ ticket.number }}/comments" class="card stack reply">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Reply
+        <textarea name="body" rows="5" required></textarea>
+      </label>
+      <div class="row between">
+        <label class="inline"><input type="checkbox" name="internal" value="true"> Internal note (agents only)</label>
+        <button type="submit" class="primary">Send</button>
+      </div>
+    </form>
+  </article>
+
+  <aside>
+    <form method="post" action="/tickets/{{ ticket.number }}" class="card stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <label>Status
+        <select name="status">
+          {% for s in Status %}<option value="{{ s.value }}" {% if ticket.status == s %}selected{% endif %}>{{ s.value|capitalize }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Priority
+        <select name="priority">
+          {% for p in Priority %}<option value="{{ p.value }}" {% if ticket.priority == p %}selected{% endif %}>{{ p.value|capitalize }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Assignee
+        <select name="assignee_id">
+          <option value="">Unassigned</option>
+          {% for a in agents %}<option value="{{ a.id }}" {% if ticket.assignee_id == a.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}
+        </select>
+      </label>
+      <button type="submit">Save changes</button>
+    </form>
+    <dl class="meta">
+      <dt>Last updated</dt><dd><time datetime="{{ ticket.updated_at.isoformat() }}">{{ ticket.updated_at.strftime('%b %d, %H:%M') }}</time> UTC</dd>
+    </dl>
+  </aside>
+</div>
+{% endblock %}
