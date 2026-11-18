@@ -250,10 +250,17 @@ async def do_release(ctx: Ctx, merge_sha: str) -> None:
         )
         finish(ctx, f"merged + released {out['version']}")
     else:
-        failed = [c["command"] for c in out["checks"] if not c["passed"]]
+        failed_checks = [c for c in out["checks"] if not c["passed"]]
+        failed = [c["command"] for c in failed_checks]
+        lines = [
+            f"- `{c['command']}`" + (f": {c['note'].strip()}" if c.get("note") else "") for c in failed_checks
+        ]
         gh.comment_pr(
             ctx.pr["number"],
-            "### 🚨 Release smoke test failed after merge\n\n" + "\n".join(f"- `{c}`" for c in failed),
+            "### 🚨 Release smoke test failed after merge\n\n"
+            + "\n".join(lines or ["- (the release agent reported a failure but named no check)"])
+            + "\n\nNo release was created. Rerun it with `python -m factory.run --release "
+            + f"{ctx.number}`.",
         )
         ctx.emit("release", "fail", f"smoke failed: {', '.join(failed)[:120]}")
         finish(ctx, "merged, smoke test failed", status="failed")

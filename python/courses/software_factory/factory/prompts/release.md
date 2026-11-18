@@ -24,5 +24,9 @@ never `uv run ruff format .`. Don't run `git commit`, `git tag`, `git push` or `
    anything an integrator or operator must do, such as a new setting, a changed API
    field or a schema change that needs a fresh database. Credit the PR number.
 
-`smoke_passed` must be false if any smoke check failed. Don't hide failures. The
+`smoke_passed` must be false if the app failed any check. Don't hide failures. But a
+check script you wrote yourself can have bugs of its own, such as a wrong import or a
+guessed field name. When your script errors before it reaches the app's behavior, read
+the code, fix the script and run it again. Report each check once, with its final
+result, and put a failure down to the app only when the app did the wrong thing. The
 factory runs the smoke test again itself before it tags a release.
